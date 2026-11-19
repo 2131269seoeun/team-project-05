@@ -1,0 +1,107 @@
+{
+  "savedAt": "2026.11.19",
+  "current": [
+    {
+      "name": "폐기물관리법",
+      "number": "제21129호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=279797"
+    },
+    {
+      "name": "폐기물관리법 시행령",
+      "number": "제36811호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=291813"
+    },
+    {
+      "name": "폐기물관리법 시행규칙",
+      "number": "제70호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=291947"
+    }
+  ],
+  "history": [
+    {
+      "name": "폐기물관리법",
+      "number": "제21850호",
+      "effective": "2027.1.8",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "시행예정",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=288005"
+    },
+    {
+      "name": "폐기물관리법",
+      "number": "제21129호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=279797"
+    },
+    {
+      "name": "폐기물관리법 시행령",
+      "number": "제36811호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=291813"
+    },
+    {
+      "name": "폐기물관리법 시행규칙",
+      "number": "제70호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "ministry": "기후에너지환경부",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=291947"
+    }
+  ],
+  "oldnew": [
+    {
+      "name": "폐기물관리법",
+      "number": "제21129호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=279797"
+    },
+    {
+      "name": "폐기물관리법 시행령",
+      "number": "제36811호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=291813"
+    },
+    {
+      "name": "폐기물관리법 시행규칙",
+      "number": "제70호",
+      "effective": "2026.11.12",
+      "change": "일부개정",
+      "status": "현행",
+      "link": "https://www.law.go.kr/lsInfoP.do?lsiSeq=291947"
+    }
+  ],
+  "ordinance": {
+    "name": "서울특별시 성북구 폐기물 관리 조례",
+    "number": "제1628호",
+    "effective": "2024.10.31",
+    "change": "일부개정",
+    "status": "현행",
+    "link": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=1980379",
+    "article8_2": "생활폐기물 수집ㆍ운반 관련 안전기준 등",
+    "tel": "02-2241-4400",
+    "dept": "청소행정과"
+  }
+}

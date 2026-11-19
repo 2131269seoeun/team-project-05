@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="법령개정 알리미">
+  <rect width="32" height="32" rx="8" fill="#3182f6"/>
+  <path d="M9 8.5h10.5L23 12v11.5H9z" fill="#fff"/>
+  <path d="M19.5 8.5V12H23" fill="none" stroke="#3182f6" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M12 16h8M12 19.5h8" stroke="#3182f6" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

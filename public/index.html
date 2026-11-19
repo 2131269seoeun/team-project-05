@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>법령개정 알리미</title>
+  <meta name="description" content="폐기물관리법이 바뀌면 성북구 폐기물 조례에서 함께 검토할 곳을 알려 드려요.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">법령개정 알리미</div>
+      <span class="stale" role="note">2019~2021년 기준 자료이며 현행 법령과 다를 수 있어요</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1구역 질문 · 답변 -->
+    <section id="ask-zone" aria-labelledby="ask-title">
+      <h1 id="ask-title">법령이 바뀌면 조례에서 챙길 곳을 찾아 드려요</h1>
+      <p class="lead">폐기물관리법과 시행규칙이 바뀌었을 때 성북구 폐기물 관리 조례에서 함께 검토할 부분을 근거 문서로만 알려 드려요. 판단과 결정은 담당자가 해요.</p>
+
+      <div class="chips" id="examples" aria-label="예시 질문"></div>
+
+      <p class="privacy">이름이나 주민등록번호 같은 개인정보는 적지 않아요. 질문은 AI 서비스(Claude · Groq · Gemini)로 전송돼요.</p>
+
+      <form class="ask" id="ask-form">
+        <label class="sr" for="q">질문</label>
+        <input class="field" id="q" name="q" type="text" maxlength="500" autocomplete="off" placeholder="궁금한 내용을 적어 주세요">
+        <button class="btn" id="ask-btn" type="submit" disabled>질문하기</button>
+      </form>
+
+      <div class="thread" id="thread" aria-live="polite"></div>
+    </section>
+
+    <!-- 2구역 개정 비교 -->
+    <section id="compare-zone" aria-labelledby="compare-title">
+      <h2 id="compare-title">개정 비교</h2>
+      <p class="lead">시행규칙이 바뀐 뒤 조례가 언제 따라왔는지 살펴봐요.</p>
+      <div id="compare"><div class="card"><span class="dots" aria-label="불러오는 중"><i></i><i></i><i></i></span></div></div>
+    </section>
+
+    <!-- 3구역 현행 확인 -->
+    <section id="law-zone" aria-labelledby="law-title">
+      <h2 id="law-title">현행 확인</h2>
+      <p class="lead">법제처에서 지금 확인한 정보예요. 질문 답변의 근거와는 따로 보여 드려요.</p>
+      <div id="law"><div class="card"><span class="dots" aria-label="불러오는 중"><i></i><i></i><i></i></span></div></div>
+    </section>
+
+    <p class="footer">이 서비스는 검토를 돕는 도구예요. 조례를 고쳐야 하는지, 위법인지는 단정하지 않고 &ldquo;검토 필요&rdquo;로만 알려 드려요. 문의처는 성북구청 대표전화 02-2241-3114(120 다산콜센터로 연결)예요.</p>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
