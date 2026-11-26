@@ -183,7 +183,7 @@
   let knownKeys = null; // 이 화면에서 이미 본 개정 — 새로 생긴 것만 브라우저 알림으로 띄운다
 
   function renderInbox(d) {
-    const box = $('#inbox');
+    const box = $('#inbox-list');
     const items = (d.history?.data || []).slice(0, 6).map((x) => ({ ...x, key: `${x.name}|${x.number}|${x.effective}` }));
     const seen = readSeen();
     const unread = items.filter((x) => !seen.has(x.key));
@@ -209,6 +209,51 @@
 
   async function refreshInbox() {
     try { renderInbox(await (await fetch('/api/law')).json()); } catch { /* 다음 확인 때 다시 시도 */ }
+  }
+
+  // ---------- 브라우저를 닫아도 받는 알림: 이메일 · 웹 푸시 ----------
+  const b64ToBytes = (b64) => Uint8Array.from(atob(b64.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64.length / 4) * 4, '=')), (c) => c.charCodeAt(0));
+
+  async function setupSubscribe() {
+    const box = $('#inbox-sub');
+    let cfg = { email: false, push: null };
+    try { cfg = await (await fetch('/api/subscribe')).json(); } catch { /* 준비 안 됨으로 보여 준다 */ }
+    const msg = h('p', { class: 'caption', role: 'status' });
+    const say = (t) => { msg.textContent = t; };
+    const post = async (body) => {
+      const res = await fetch('/api/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || '잠시 뒤에 다시 시도해 주세요');
+      return j;
+    };
+    const input = h('input', { class: 'field', type: 'email', placeholder: '이메일 주소', maxlength: '120', autocomplete: 'email', 'aria-label': '알림 받을 이메일 주소', disabled: cfg.email ? null : 'disabled' });
+    const mailBtn = h('button', { type: 'button', class: 'btn btn-m btn-secondary', disabled: cfg.email ? null : 'disabled', onclick: async () => {
+      mailBtn.disabled = true; say('확인 메일을 보내는 중이에요…');
+      try { await post({ email: input.value }); say('확인 메일을 보냈어요. 메일의 링크를 눌러야 알림이 시작돼요.'); input.value = ''; }
+      catch (e) { say(e.message); }
+      mailBtn.disabled = false;
+    } }, '이메일로 받기');
+    const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    const pushBtn = h('button', { type: 'button', class: 'btn btn-m btn-secondary', disabled: cfg.push && pushSupported ? null : 'disabled', onclick: async () => {
+      pushBtn.disabled = true;
+      try {
+        if (await Notification.requestPermission() !== 'granted') throw new Error('브라우저에서 알림을 허용해야 해요');
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(cfg.push) });
+        await post({ push: sub.toJSON() });
+        say('웹 푸시를 켰어요. 브라우저를 닫아도 알림이 와요.');
+      } catch (e) { say(e.message); }
+      pushBtn.disabled = false;
+    } }, '웹 푸시 켜기');
+    const ready = cfg.email || cfg.push;
+    box.replaceChildren(
+      h('h3', { class: 'inbox-sub-title' }, '닫아도 알림 받기'),
+      ready ? null : h('p', { class: 'caption' }, '이메일·웹 푸시 알림은 준비하고 있어요.'),
+      h('div', { class: 'inbox-sub-form' }, input, mailBtn, pushBtn),
+      !pushSupported ? h('p', { class: 'caption' }, '이 브라우저는 웹 푸시를 지원하지 않아요.') : null,
+      h('p', { class: 'caption' }, '법령이 개정되면 하루 한 번 확인해서 알려 드려요. 이메일은 알림 보내는 데만 쓰고, 메일의 링크로 언제든 해지할 수 있어요.'),
+      msg);
   }
 
   async function loadLaw() {
@@ -245,5 +290,6 @@
 
   loadCompare();
   loadLaw();
+  setupSubscribe();
   setInterval(refreshInbox, 10 * 60 * 1000);
 })();
