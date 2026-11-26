@@ -337,18 +337,20 @@
     try { done = JSON.parse(localStorage.getItem(CHECK_KEY) || '[]'); } catch { /* 저장 못 해도 동작 */ }
     const save = () => { try { localStorage.setItem(CHECK_KEY, JSON.stringify(done)); } catch { /* 무시 */ } };
     const count = h('span', { class: 'caption num', role: 'status' });
-    const refresh = () => { count.textContent = `${done.length} / ${STEPS.length} 완료`; };
+    const refresh = () => { count.textContent = `${done.length}/${STEPS.length}`; };
     const items = STEPS.map(([title, note], i) => {
       const box = h('input', { type: 'checkbox', id: `step-${i}`, checked: done.includes(i) ? 'checked' : null });
       box.addEventListener('change', () => { done = box.checked ? [...new Set([...done, i])] : done.filter((x) => x !== i); save(); refresh(); });
-      return h('li', { class: 'check-item' }, box, h('label', { for: `step-${i}` }, h('span', { class: 't' }, `${i + 1}. ${title}`), h('span', { class: 's' }, note)));
+      return h('li', { class: 'check-item', title: note }, box, h('label', { for: `step-${i}` }, h('span', { class: 't' }, `${i + 1}. ${title}`)));
     });
     refresh();
-    mount.replaceChildren(h('div', { class: 'card' },
-      h('div', { class: 'sec-head' }, h('h3', {}, '조례 개정 단계'), badge('일반 절차 · 확인 필요', 'demo')),
-      h('p', { class: 'caption' }, '앱의 근거 문서에 없는 일반적인 순서예요. 기간과 기관은 성북구 규정으로 확인해 주세요.'),
+    // 넓은 화면에서는 펼쳐 두고, 좁은 화면(본문 아래로 내려옴)에서는 접어 둬서 페이지가 길어지지 않게 한다
+    const wide = window.matchMedia('(min-width: 1201px)').matches;
+    mount.replaceChildren(h('details', { class: 'side-check', open: wide ? 'open' : null },
+      h('summary', {}, h('span', { class: 'side-title' }, '개정 절차'), count),
+      h('p', { class: 'caption' }, '근거 문서에 없는 일반 순서예요. 기간·기관은 구 규정으로 확인해 주세요. 항목에 마우스를 올리면 설명이 나와요.'),
       h('ol', { class: 'checklist' }, items),
-      h('div', { class: 'mt-12' }, count, ' ', h('button', { type: 'button', class: 'text-btn', onclick: () => { done = []; save(); renderChecklist(); } }, '처음부터 다시'))));
+      h('button', { type: 'button', class: 'text-btn', onclick: () => { done = []; save(); renderChecklist(); } }, '처음부터 다시')));
   }
 
   loadCompare();

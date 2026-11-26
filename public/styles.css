@@ -97,7 +97,7 @@ a { color: var(--blue-text); text-decoration: none; }
   border-bottom: 1px solid var(--line);
 }
 .top-inner {
-  max-width: 1120px; margin: 0 auto; padding: 8px 24px;
+  max-width: 1380px; margin: 0 auto; padding: 8px 24px;
   min-height: 56px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
 }
 .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.015em; white-space: nowrap; }
@@ -110,7 +110,7 @@ a { color: var(--blue-text); text-decoration: none; }
 main { max-width: 760px; min-width: 0; flex: 1; padding: 0 24px 80px; }
 
 /* 왼쪽 알림함 — 좁은 화면에서는 본문 위로 올라온다 */
-.layout { max-width: 1120px; margin: 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 0 24px; }
+.layout { max-width: 1380px; flex-wrap: wrap; margin: 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 0 24px; }
 .inbox {
   position: sticky; top: 72px; flex: 0 0 280px; margin-top: 40px; padding: 20px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 24px;
@@ -282,3 +282,18 @@ details[open] summary::after { content: "접기"; }
 .cmp-tag { padding: 2px 10px; border-radius: 999px; background: var(--red-wash); color: var(--red-text); font-size: 12px; font-weight: 600; }
 .cmp-details .cmp th { background: var(--surface); }
 .cmp-details .cmp td { background: var(--surface); }
+
+/* 오른쪽 개정 절차 — 작게. 1200px 이하에서는 본문 아래로 내려오고 접힌다 */
+.side-right { position: sticky; top: 72px; flex: 0 0 248px; margin-top: 40px; padding: 4px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; max-height: calc(100vh - 96px); overflow: auto; }
+.side-check > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; cursor: pointer; }
+.side-title { font-size: 15px; font-weight: 700; }
+.side-right .caption { margin: 0 0 4px; font-size: 11px; }
+.side-right .checklist { margin-top: 4px; gap: 0; }
+.side-right .check-item { padding: 7px 0; gap: 8px; }
+.side-right .check-item input { width: 16px; height: 16px; margin-top: 3px; }
+.side-right .check-item .t { font-size: 13px; font-weight: 500; line-height: 1.45; }
+.side-right .text-btn { min-height: 36px; padding: 0; font-size: 13px; }
+@media (max-width: 1200px) { .side-right { order: 3; flex: 1 1 100%; position: static; margin: 0 24px; max-height: none; } }
+@media (max-width: 900px) { .side-right { margin: 16px 24px 0; } }
+.side-check { margin-top: 0; border: 0; border-radius: 0; }
+.side-check > summary { min-height: 0; }
