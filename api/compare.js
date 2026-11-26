@@ -84,6 +84,35 @@ function comparisonTable(d, before) {
   };
 }
 
+// 시행규칙에서 번호만 옮겨진 조문의 개정 전·후 원문 (신구 비교 강조에서 "바뀐 곳"만 표시하려고)
+function ruleMoved() {
+  const before = articles('rule830');
+  return changedAt('rule843').filter((c) => c.kind === '이동').map((c) => {
+    const prev = before.find((a) => titleOf(a.heading) === titleOf(c.heading));
+    return prev ? { fromLabel: prev.label, toLabel: c.label, before: `${prev.heading}\n\n${stripHeading(prev.body)}`, after: `${c.heading}\n\n${stripHeading(c.body)}` } : null;
+  }).filter(Boolean);
+}
+
+// 법률 제14조의5(신설): 조례에 직접 맡긴 내용은 없지만, 시행규칙 제16조의3을 거쳐 조례와 이어지는 상위 조문
+function lawFinding() {
+  const a = articles('law16318').find((x) => x.label === '제14조의5');
+  if (!a) return null;
+  const before = ordinanceLinks('ord1349', a.label);
+  const after = ordinanceLinks('ord1396', a.label);
+  const pack = (v, code, list, withText) => ({ ...v, code, found: list.length > 0, articles: list.map(({ label, heading, body }) => (withText ? { label, heading, text: body } : { label, heading })) });
+  return {
+    type: 'law',
+    rule: { code: 'law16318', ...VERSIONS.law16318, label: a.label, heading: a.heading, kind: '신설', text: a.body, delegatesTo: '환경부령', sentence: ((a.body.match(/[^.\n]*환경부령으로 정[^.\n]*/) || [''])[0]).trim() || null },
+    ordinance: { before: pack(VERSIONS.ord1349, 'ord1349', before, false), after: pack(VERSIONS.ord1396, 'ord1396', after, true) },
+    status: before.length === 0 ? '검토 필요' : '확인됨',
+    gap: after.length ? monthsBetween(VERSIONS.law16318.date, VERSIONS.ord1396.date) : null,
+    table: null,
+    alert: before.length === 0
+      ? `${VERSIONS.law16318.name} ${a.label} 신설(${VERSIONS.law16318.date.replaceAll('-', '.')} 시행): 조례에 직접 맡긴 내용은 없지만, 구체적인 기준은 환경부령(시행규칙 제16조의3)으로 이어져요. 대상 자치법규인 ${VERSIONS.ord1349.name}(제1349호)에서는 이 조문을 인용한 규정을 찾지 못했어요. 시행규칙과 함께 검토가 필요해요.`
+      : null,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET 으로 불러 주세요' });
   // 문서(chunks)로만 계산해서 배포 사이에는 바뀌지 않는다 — 1시간 캐시
@@ -98,6 +127,7 @@ export default async function handler(req, res) {
     const after = ordinanceLinks('ord1396', d.label);
     const gap = after.length ? monthsBetween(VERSIONS.rule843.date, VERSIONS.ord1396.date) : null;
     return {
+      type: 'rule',
       rule: { code: 'rule843', ...VERSIONS.rule843, label: d.label, heading: d.heading, kind: d.kind, text: d.body },
       ordinance: {
         before: { ...VERSIONS.ord1349, code: 'ord1349', found: before.length > 0, articles: before.map(({ label, heading }) => ({ label, heading })) },
@@ -115,8 +145,8 @@ export default async function handler(req, res) {
   res.status(200).json({
     mode: '미리 받은 문서',
     notice: NOTICE,
-    rule: { from: { code: 'rule830', ...VERSIONS.rule830 }, to: { code: 'rule843', ...VERSIONS.rule843 }, changedCount: ruleChanges.length, changed: ruleChanges.map(({ label, heading, kind, delegatesToOrdinance }) => ({ label, heading, kind, delegatesToOrdinance })) },
+    rule: { from: { code: 'rule830', ...VERSIONS.rule830 }, to: { code: 'rule843', ...VERSIONS.rule843 }, changedCount: ruleChanges.length, moved: ruleMoved(), changed: ruleChanges.map(({ label, heading, kind, delegatesToOrdinance }) => ({ label, heading, kind, delegatesToOrdinance })) },
     ordinance: { from: { code: 'ord1349', ...VERSIONS.ord1349 }, to: { code: 'ord1396', ...VERSIONS.ord1396 }, changedCount: ordChanges.length, changed: ordChanges.map(({ label, heading, kind }) => ({ label, heading, kind })) },
-    findings,
+    findings: [lawFinding(), ...findings].filter(Boolean),
   });
 }

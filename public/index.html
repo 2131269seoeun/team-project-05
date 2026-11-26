@@ -15,6 +15,7 @@
       <div class="brand">법령개정 알리미</div>
       <span class="stale" role="note">2019~2021년 기준 자료이며 현행 법령과 다를 수 있어요</span>
     </div>
+    <nav class="tabs" id="tabs" aria-label="화면 이동"></nav>
   </header>
 
   <div class="layout">
@@ -40,20 +41,27 @@
     </section>
 
     <!-- 2구역 개정 비교 -->
-    <section id="compare-zone" aria-labelledby="compare-title">
+    <section id="compare-zone" aria-labelledby="compare-title" hidden>
       <h2 id="compare-title">개정 비교</h2>
       <p class="lead">시행규칙이 바뀐 뒤 조례가 언제 따라왔는지 살펴봐요.</p>
       <div id="compare"><div class="card"><span class="dots" aria-label="불러오는 중"><i></i><i></i><i></i></span></div></div>
     </section>
 
     <!-- 3구역 현행 확인 -->
-    <section id="law-zone" aria-labelledby="law-title">
+    <section id="law-zone" aria-labelledby="law-title" hidden>
       <h2 id="law-title">현행 확인</h2>
       <p class="lead">법제처에서 지금 확인한 정보예요. 질문 답변의 근거와는 따로 보여 드려요.</p>
       <div id="law"><div class="card"><span class="dots" aria-label="불러오는 중"><i></i><i></i><i></i></span></div></div>
     </section>
 
-        <p class="footer">이 서비스는 검토를 돕는 도구예요. 조례를 고쳐야 하는지, 위법인지는 단정하지 않고 &ldquo;검토 필요&rdquo;로만 알려 드려요. 문의처는 성북구청 대표전화 02-2241-3114(120 다산콜센터로 연결)예요.</p>
+        <!-- 4구역 현황판 -->
+    <section id="board-zone" aria-labelledby="board-title" hidden>
+      <h2 id="board-title">현황판</h2>
+      <p class="lead">확인할 항목의 진행 상태, 담당자, 기한, 협의 부서를 한 곳에서 관리해요.</p>
+      <div id="board"><div class="card"><span class="dots" aria-label="불러오는 중"><i></i><i></i><i></i></span></div></div>
+    </section>
+
+    <p class="footer">이 서비스는 검토를 돕는 도구예요. 조례를 고쳐야 하는지, 위법인지는 단정하지 않고 &ldquo;검토 필요&rdquo;로만 알려 드려요. 문의처는 성북구청 대표전화 02-2241-3114(120 다산콜센터로 연결)예요.</p>
   </main>
 
   <aside class="side-right" id="checklist-zone" aria-label="개정 절차 체크리스트"><div id="checklist"></div></aside>

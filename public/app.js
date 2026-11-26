@@ -98,7 +98,9 @@
       const res = await fetch('/api/compare');
       const d = await res.json();
       mount.replaceChildren(renderCompare(d));
+      renderBoard(d.findings || []);
     } catch {
+      $('#board').replaceChildren(h('div', { class: 'card' }, '항목을 불러오지 못했어요. 개정 비교 화면에서 다시 불러와 주세요.'));
       mount.replaceChildren(h('div', { class: 'card' }, '개정 비교를 불러오지 못했어요. 잠시 뒤에 다시 시도해 주세요. ', h('button', { type: 'button', class: 'text-btn', onclick: loadCompare }, '다시 불러오기')));
     }
   }
@@ -131,12 +133,53 @@
         } }, '표 내용 복사'), status)));
   }
 
-  function renderCompare(d) {
-    const f = d.findings?.[0];
+  // 두 글을 낱말 단위로 비교해서, 없어진 말은 <del>, 새로 생긴 말은 <ins> 로 감싼다
+  function diffNodes(a, b) {
+    const x = a.split(/(\s+)/).filter(Boolean), y = b.split(/(\s+)/).filter(Boolean);
+    const n = x.length, m = y.length;
+    const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const ops = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (x[i] === y[j]) { ops.push(['eq', x[i]]); i++; j++; }
+      else if (L[i + 1][j] >= L[i][j + 1]) ops.push(['del', x[i++]]);
+      else ops.push(['ins', y[j++]]);
+    }
+    while (i < n) ops.push(['del', x[i++]]);
+    while (j < m) ops.push(['ins', y[j++]]);
+    const out = [];
+    for (const [kind, text] of ops) {
+      const last = out[out.length - 1];
+      if (last && last.kind === kind) last.text += text; else out.push({ kind, text });
+    }
+    return out.map(({ kind, text }) => (kind === 'eq' ? document.createTextNode(text) : h(kind, {}, text)));
+  }
+
+  // 신구 비교 강조: 새 조문은 통째로 초록 밑줄, 번호만 옮겨진 조문은 바뀐 곳만 표시한다
+  function highlightBlock(f, d) {
+    const moved = f.type === 'rule' ? (d.rule.moved || []) : [];
+    return h('details', { class: 'hl-details', open: 'open' },
+      h('summary', {}, '신구 비교 강조'),
+      h('div', { class: 'details-body' },
+        h('p', { class: 'caption' }, '초록 밑줄은 새로 생긴 내용, 빨간 취소선은 없어진 내용이에요.'),
+        h('div', { class: 'doc-label' }, `${f.rule.name} ${f.rule.label} · ${f.rule.kind} (이전 판에 없던 조문이라 전체가 새 내용이에요)`),
+        h('div', { class: 'doc diff' }, h('ins', {}, stripHeading(f.rule.text))),
+        moved.flatMap((m) => [
+          h('div', { class: 'doc-label' }, `${m.fromLabel} → ${m.toLabel} · 번호가 옮겨진 조문 (바뀐 곳만 표시해요)`),
+          h('div', { class: 'doc diff' }, diffNodes(m.before, m.after)),
+        ])));
+  }
+
+  const titleOfHeading = (heading) => (heading.match(/\(([^)]*)\)/) || [])[1] || '';
+  const cardSummary = (f) => (f.type === 'law' ? '구체적인 기준을 환경부령에 맡긴 상위 조문이에요.' : '예외 사유를 조례로 정하도록 맡긴 조문이에요.');
+
+  // 검토 항목 한 건의 상세: 3단계 흐름 + 본문 + 대비표 틀 + 신구 비교 강조
+  function renderFinding(f, d) {
     const card = h('div', { class: 'card' });
-    if (!f) { card.append('조례에 맡긴 내용이 있는 개정 조문을 찾지 못했어요.'); return card; }
     const before = f.ordinance.before, after = f.ordinance.after;
-    const sentence = (f.rule.text.match(/[^.\n]*조례로 정한 사유[^.\n]*/) || [''])[0].trim();
+    const target = f.type === 'law' ? f.rule.delegatesTo : '조례';
+    const sentence = f.table?.sentence || f.rule.sentence || '';
 
     card.append(
       h('div', { class: 'meta' }, modeBadge(d.mode), badge(f.status, f.status === '검토 필요' ? 'warn' : 'ok')),
@@ -144,7 +187,7 @@
         h('li', { class: 'step' }, h('span', { class: 'node' }, '1'),
           h('div', {}, h('div', { class: 'date num' }, fmt(f.rule.date) + ' 시행'),
             h('div', { class: 'title' }, `${f.rule.name} ${f.rule.label} ${f.rule.kind}`),
-            h('div', { class: 'desc' }, sentence ? `"${sentence}"처럼 예외 사유를 조례에 맡겼어요.` : '조례에 맡긴 내용이 있어요.'),
+            h('div', { class: 'desc' }, sentence ? `"${sentence}"처럼 내용을 ${target}에 맡겼어요.` : `${target}에 맡긴 내용이 있어요.`),
             h('div', { class: 'caption' }, f.rule.ver))),
         h('li', { class: 'step' }, h('span', { class: before.found ? 'node done' : 'node warn' }, '2'),
           h('div', {}, h('div', { class: 'date num' }, fmt(before.date) + ' 시행'),
@@ -152,23 +195,53 @@
             h('div', { class: 'desc' }, before.found ? `관련 조문: ${before.articles.map((a) => a.label).join(', ')}` : '맡겨진 내용을 정한 규정을 찾지 못했어요. 검토가 필요해요.'),
             before.found ? null : h('div', { class: 'tags' }, badge('검토 필요', 'warn')))),
         h('li', { class: 'step' }, h('span', { class: 'node done' }, '3'),
-          h('div', {}, h('div', { class: 'date num' }, fmt(after.date) + ' 시행'),
+          h('div', {}, h('div', { class: 'date num' }, fmt(after.date) + ' 시행 · 사후 확인'),
             h('div', { class: 'title' }, after.found ? `성북구 조례 ${after.ver.split(' · ')[0].replace('조례 ', '')}, ${after.articles.map((a) => a.label).join('·')} 신설` : '해당 조문을 찾지 못했어요'),
             h('div', { class: 'desc' }, after.articles.map((a) => a.heading).join(', ')),
             f.gap ? h('div', { class: 'tags' }, badge(`비어 있던 기간 약 ${f.gap.months}개월 ${f.gap.days}일`, 'demo'), h('span', { class: 'caption num' }, `${fmt(f.rule.date)} ~ ${fmt(dayBefore(after.date))}`)) : null))),
       f.alert ? h('div', { class: 'notice-box' }, h('strong', {}, '검토 필요  '), f.alert) : null,
+      highlightBlock(f, d),
+      comparisonTable(f),
       h('details', {}, h('summary', {}, '조문 본문 보기'),
         h('div', { class: 'doc-label' }, `${f.rule.name} ${f.rule.label} (${f.rule.ver})`),
         h('div', { class: 'doc' }, stripHeading(f.rule.text)),
-        after.articles[0] ? [h('div', { class: 'doc-label' }, `성북구 조례 ${after.articles[0].label} (${after.ver})`), h('div', { class: 'doc' }, stripHeading(after.articles[0].text))] : null),
-      comparisonTable(f),
-      h('div', { class: 'sec-head' }, h('h3', {}, `${f.rule.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.rule.changedCount}개`)),
-      h('div', { class: 'tags' }, d.rule.changed.map((c) => badge(`${c.label} ${c.kind}`, c.delegatesToOrdinance ? 'warn' : ''))),
-      h('div', { class: 'sec-head' }, h('h3', {}, `${d.ordinance.to.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.ordinance.changedCount}개`)),
-      h('div', { class: 'tags' }, d.ordinance.changed.filter((c) => c.label.startsWith('제')).map((c) => badge(`${c.label} ${c.kind}`))),
-      h('p', { class: 'caption mt-16' }, d.notice),
-    );
+        after.articles[0] ? [h('div', { class: 'doc-label' }, `성북구 조례 ${after.articles[0].label} (${after.ver})`), h('div', { class: 'doc' }, stripHeading(after.articles[0].text))] : null));
+    if (f.type === 'rule') {
+      card.append(
+        h('div', { class: 'sec-head' }, h('h3', {}, `${f.rule.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.rule.changedCount}개`)),
+        h('div', { class: 'tags' }, d.rule.changed.map((c) => badge(`${c.label} ${c.kind}`, c.delegatesToOrdinance ? 'warn' : ''))),
+        h('div', { class: 'sec-head' }, h('h3', {}, `${d.ordinance.to.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.ordinance.changedCount}개`)),
+        h('div', { class: 'tags' }, d.ordinance.changed.filter((c) => c.label.startsWith('제')).map((c) => badge(`${c.label} ${c.kind}`))));
+    }
+    card.append(h('p', { class: 'caption mt-16' }, d.notice));
     return card;
+  }
+
+  // 검토 필요 목록(항목 카드) + 선택한 항목의 상세
+  function renderCompare(d) {
+    const items = d.findings || [];
+    const box = h('div', {});
+    if (!items.length) { box.append(h('div', { class: 'card' }, '조례와 이어지는 개정 조문을 찾지 못했어요.')); return box; }
+    let selected = Math.max(0, items.findIndex((f) => f.type === 'rule'));
+    const banner = h('div', { class: 'notice-box asof' },
+      h('strong', {}, '시연 기준일 2019. 12. 31.'),
+      h('p', {}, '시행규칙 제16조의3이 시행된 날로 돌아가, 이때 조례에서 고칠 곳을 찾아봐요. 정비가 끝난 뒤(2021. 10. 6.)의 결과는 "사후 확인"으로 함께 보여요.'),
+      h('p', {}, '기준일에 시행 중이던 조례 판은 자료에 없어서, 정비 전 모습이 담긴 제1349호(2020. 12. 31. 시행)를 대신 써요. 기준일보다 뒤 판이라서 실제 업무라면 기준일의 판과 다시 대조해야 해요.'));
+    const list = h('div', { class: 'review-list' });
+    const detail = h('div', {});
+    const draw = () => {
+      list.replaceChildren(...items.map((f, i) => h('div', { class: 'review-card' + (i === selected ? ' on' : '') },
+        h('div', { class: 'review-top' }, h('h3', {}, `${f.rule.name} ${f.rule.label}`),
+          h('div', { class: 'tags' }, badge(f.status, f.status === '검토 필요' ? 'warn' : 'ok'), f.ordinance.before.found ? null : badge('조례 미정비', 'warn'))),
+        h('p', { class: 'caption' }, `${titleOfHeading(f.rule.heading)} · ${f.rule.kind}`),
+        h('p', {}, cardSummary(f)),
+        h('p', { class: 'caption num' }, `${fmt(f.rule.date)} 시행 · 연결 조례 ${f.ordinance.before.name}`),
+        h('button', { type: 'button', class: 'btn btn-m' + (i === selected ? ' btn-secondary' : ''), 'aria-pressed': String(i === selected), onclick: () => { selected = i; draw(); } }, i === selected ? '보는 중' : '신구법 비교 보기'))));
+      detail.replaceChildren(renderFinding(items[selected], d));
+    };
+    draw();
+    box.append(banner, list, detail);
+    return box;
   }
 
   // ---------- 3구역: 현행 확인 ----------
@@ -353,6 +426,132 @@
       h('button', { type: 'button', class: 'text-btn', onclick: () => { done = []; save(); renderChecklist(); } }, '처음부터 다시')));
   }
 
+  // ---------- 4구역: 현황판 ----------
+  // 입력한 내용은 이 브라우저(localStorage)에만 저장해요. 다른 담당자와는 파일로 주고받아요.
+  const BOARD_KEY = 'law-alert-board';
+  const STATUSES = ['확인 전', '검토 중', '부서 협의 중', '개정안 작성 중', '검토 완료'];
+  const FIELD = { status: '진행 상태', owner: '담당자', due: '기한', dept: '협의 부서', memo: '메모' };
+  const clip = (v, max) => String(v ?? '').slice(0, max);
+  const readBoard = () => { try { const v = JSON.parse(localStorage.getItem(BOARD_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+  const writeBoard = (v) => { try { localStorage.setItem(BOARD_KEY, JSON.stringify(v)); return true; } catch { return false; } };
+  // 저장소나 불러온 파일의 값은 믿지 않고 모양을 다시 맞춘다
+  function cleanEntry(e) {
+    const o = { status: STATUSES[0], owner: '', due: '', dept: '', memo: '', log: [] };
+    if (e && typeof e === 'object') {
+      if (STATUSES.includes(e.status)) o.status = e.status;
+      o.owner = clip(e.owner, 60); o.dept = clip(e.dept, 80); o.memo = clip(e.memo, 2000);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(e.due)) o.due = e.due;
+      if (Array.isArray(e.log)) o.log = e.log.slice(-100).map((l) => ({ at: clip(l?.at, 30), text: clip(l?.text, 200) }));
+    }
+    return o;
+  }
+  const stamp = () => new Date().toLocaleString('ko-KR', { hour12: false });
+  const csvCell = (v) => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replaceAll('"', '""')}"`; }; // 수식으로 읽히지 않게
+  function saveFile(name, type, text) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = h('a', { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function renderBoard(findings) {
+    const mount = $('#board');
+    const items = findings.map((f) => ({
+      id: `${f.rule.code}|${f.rule.label}`, title: `${f.rule.name} ${f.rule.label}`,
+      sub: `${f.ordinance.before.name} · 시행 ${fmt(f.rule.date)}`, date: f.rule.date, review: f.status, open: !f.ordinance.before.found,
+    }));
+    const data = readBoard();
+    const entry = (id) => (data[id] = cleanEntry(data[id]));
+    const ui = { q: '', status: '전체', sort: 'due' };
+    const note = h('p', { class: 'caption', role: 'status' });
+    const list = h('div', { class: 'board-list' });
+    const persist = () => { note.textContent = writeBoard(data) ? '' : '이 브라우저에 저장하지 못했어요. 파일로 내보내 두세요.'; };
+
+    function card(it, idx) {
+      const e = entry(it.id);
+      const logBox = h('div', {});
+      const drawLog = () => logBox.replaceChildren(h('details', {}, h('summary', {}, `변경 이력 (${e.log.length}건)`),
+        e.log.length ? h('ul', { class: 'board-log' }, e.log.slice().reverse().map((l) => h('li', {}, h('span', { class: 'caption num' }, `${l.at}  `), l.text))) : h('p', { class: 'caption board-pad' }, '아직 바꾼 내용이 없어요.')));
+      const save = (key, value) => {
+        if (e[key] === value) return;
+        const text = key === 'memo' ? '메모를 고쳤어요' : `${FIELD[key]}: ${e[key] || '비어 있음'} → ${value || '비어 있음'}`;
+        e[key] = value; e.log = [...e.log, { at: stamp(), text }].slice(-100);
+        persist(); drawLog();
+      };
+      const field = (key, label, control) => h('div', { class: 'bf' }, h('label', { for: `bf-${idx}-${key}` }, label), control);
+      const id = (key) => `bf-${idx}-${key}`;
+      drawLog();
+      return h('div', { class: 'review-card board-card' },
+        h('div', { class: 'review-top' }, h('h3', {}, it.title), h('div', { class: 'tags' }, badge(it.review, it.review === '검토 필요' ? 'warn' : 'ok'), it.open ? badge('조례 미정비', 'warn') : null)),
+        h('p', { class: 'caption' }, it.sub),
+        h('div', { class: 'bf-grid' },
+          field('status', '진행 상태', h('select', { class: 'field', id: id('status'), onchange: (ev) => save('status', ev.target.value) }, STATUSES.map((st) => h('option', { value: st, selected: st === e.status ? 'selected' : null }, st)))),
+          field('owner', '담당자', h('input', { class: 'field', id: id('owner'), type: 'text', maxlength: '60', placeholder: '이름 또는 부서', value: e.owner, onchange: (ev) => save('owner', ev.target.value.trim()) })),
+          field('due', '기한', h('input', { class: 'field', id: id('due'), type: 'date', value: e.due, onchange: (ev) => save('due', ev.target.value) })),
+          field('dept', '협의 부서', h('input', { class: 'field', id: id('dept'), type: 'text', maxlength: '80', placeholder: '예: 청소행정과, 법무 담당', value: e.dept, onchange: (ev) => save('dept', ev.target.value.trim()) }))),
+        field('memo', '메모', h('textarea', { class: 'field memo', id: id('memo'), maxlength: '2000', rows: '3', placeholder: '협의 내용, 확인할 사항', onchange: (ev) => save('memo', ev.target.value) }, e.memo)),
+        logBox);
+    }
+
+    const dueKey = (it) => entry(it.id).due || '9999-99-99';
+    function draw() {
+      const q = ui.q.trim().toLowerCase();
+      const shown = items.filter((it) => {
+        const e = entry(it.id);
+        return (ui.status === '전체' || e.status === ui.status) && (!q || [it.title, it.sub, e.owner, e.dept, e.memo].join(' ').toLowerCase().includes(q));
+      }).sort((a, b) => (ui.sort === 'due' ? dueKey(a).localeCompare(dueKey(b)) : a.date.localeCompare(b.date)));
+      list.replaceChildren(...(shown.length ? shown.map((it) => card(it, items.indexOf(it))) : [h('p', { class: 'caption' }, '조건에 맞는 항목이 없어요.')]));
+    }
+
+    const fileInput = h('input', { type: 'file', accept: 'application/json,.json', class: 'sr', id: 'board-file', tabindex: '-1' });
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0]; fileInput.value = '';
+      if (!file) return;
+      try {
+        if (file.size > 1_000_000) throw new Error('size');
+        const obj = JSON.parse(await file.text());
+        if (obj?.app !== 'law-alert-board' || !obj.items || typeof obj.items !== 'object') throw new Error('format');
+        let n = 0;
+        for (const it of items) if (obj.items[it.id]) { data[it.id] = cleanEntry(obj.items[it.id]); n++; }
+        persist(); draw(); note.textContent = `${n}개 항목을 불러왔어요.`;
+      } catch { note.textContent = '이 서비스에서 내보낸 파일이 아니거나 읽을 수 없어요.'; }
+    });
+
+    const today = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+    mount.replaceChildren(
+      h('div', { class: 'notice-box warn-box' }, h('strong', {}, '저장 위치  '),
+        '입력한 내용은 이 브라우저에만 저장돼요. 다른 담당자와 나누려면 "파일로 내보내기"로 파일을 전달하고, 받는 쪽은 "파일 불러오기"를 써요. 브라우저 데이터를 지우면 사라지니 가끔 내보내 두세요. 여러 명이 함께 쓰는 서버 저장은 아직 없어요.'),
+      h('div', { class: 'board-filter' },
+        h('div', { class: 'bf' }, h('label', { for: 'board-q' }, '검색'), h('input', { class: 'field', id: 'board-q', type: 'search', placeholder: '법령, 담당자, 부서, 메모', oninput: (ev) => { ui.q = ev.target.value; draw(); } })),
+        h('div', { class: 'bf' }, h('label', { for: 'board-status' }, '진행 상태'), h('select', { class: 'field', id: 'board-status', onchange: (ev) => { ui.status = ev.target.value; draw(); } }, ['전체', ...STATUSES].map((st) => h('option', { value: st }, st)))),
+        h('div', { class: 'bf' }, h('label', { for: 'board-sort' }, '정렬'), h('select', { class: 'field', id: 'board-sort', onchange: (ev) => { ui.sort = ev.target.value; draw(); } }, h('option', { value: 'due' }, '기한 빠른 순'), h('option', { value: 'date' }, '법령 시행일 순')))),
+      list,
+      h('div', { class: 'board-actions' },
+        h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => {
+          const rows = [['법령', '연결 조례', '시행일', '진행 상태', '담당자', '기한', '협의 부서', '메모'], ...items.map((it) => { const e = entry(it.id); return [it.title, it.sub.split(' · ')[0], fmt(it.date), e.status, e.owner, e.due, e.dept, e.memo]; })];
+          saveFile(`법령개정-현황판-${today}.csv`, 'text/csv;charset=utf-8', '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n'));
+        } }, '표(CSV)로 내보내기'),
+        h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => saveFile(`법령개정-현황판-${today}.json`, 'application/json', JSON.stringify({ app: 'law-alert-board', version: 1, savedAt: new Date().toISOString(), items: Object.fromEntries(items.map((it) => [it.id, entry(it.id)])) }, null, 2)) }, '파일로 내보내기'),
+        h('label', { class: 'btn btn-m btn-secondary file-btn', for: 'board-file' }, '파일 불러오기'), fileInput),
+      note);
+    draw();
+  }
+
+  // ---------- 화면 단계 탭 ----------
+  const TABS = [['ask', '질문·답변'], ['compare', '개정 비교'], ['law', '현행 확인'], ['board', '현황판']];
+  function setupTabs() {
+    const nav = $('#tabs');
+    const show = (id) => {
+      for (const [k] of TABS) { const sec = $(`#${k}-zone`); if (sec) sec.hidden = k !== id; }
+      nav.querySelectorAll('button').forEach((b) => { const on = b.dataset.tab === id; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    };
+    nav.replaceChildren(...TABS.map(([k, label]) => h('button', { type: 'button', 'data-tab': k, onclick: () => { history.replaceState(null, '', '#' + k); show(k); window.scrollTo({ top: 0 }); } }, label)));
+    const fromHash = () => { const k = (location.hash || '').slice(1); return TABS.some(([t]) => t === k) ? k : 'ask'; };
+    window.addEventListener('hashchange', () => show(fromHash()));
+    show(fromHash());
+  }
+
+  setupTabs();
   loadCompare();
   loadLaw();
   renderChecklist();
