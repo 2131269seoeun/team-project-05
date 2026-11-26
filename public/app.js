@@ -113,11 +113,11 @@
     const t = f.table;
     if (!t) return null;
     const cell = (c, note) => c
-      ? h('td', {}, h('strong', {}, c.heading), h('div', { class: 'cmp-text' }, c.text))
-      : h('td', { class: 'cmp-empty' }, note || '');
+      ? h('td', { 'data-label': '현행 (개정 전 조례)' }, h('strong', {}, c.heading), h('div', { class: 'cmp-text' }, c.text))
+      : h('td', { class: 'cmp-empty', 'data-label': '현행 (개정 전 조례)' }, note || '');
     const rows = t.rows.map((r) => h('tr', {},
       cell(r.current, r.currentNote),
-      h('td', { class: 'cmp-empty' }, '담당자가 작성해요', r.reference ? h('div', { class: 'caption' }, `참고: ${r.reference}`) : null)));
+      h('td', { class: 'cmp-empty', 'data-label': '개정안' }, '담당자가 작성해요', r.reference ? h('div', { class: 'caption' }, `참고: ${r.reference}`) : null)));
     const asText = () => [`[신구조문 대비표 틀] ${t.basis}`, t.sentence ? `위임 문구: ${t.sentence}` : '', '', ...t.rows.map((r, i) => `${i + 1}. 현행: ${r.current ? `${r.current.heading}\n${r.current.text}` : r.currentNote}\n   개정안: (담당자 작성)`)].filter((x) => x !== '').join('\n');
     const status = h('span', { class: 'caption', role: 'status' });
     return h('details', { class: 'cmp-details', open: 'open' },
@@ -156,18 +156,21 @@
     return out.map(({ kind, text }) => (kind === 'eq' ? document.createTextNode(text) : h(kind, {}, text)));
   }
 
+  // [본조신설 …] · [… 이동 …] 줄과 <개정 2016. 7. 21.> 같은 개정 이력 표시는 비교에서 뺀다
+  const withoutHistory = (t) => t.split('\n').filter((l) => !/^\s*\[[^\]]*\]\s*$/.test(l)).join('\n').replace(/\s*<[^<>]*\d{4}\.[^<>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim();
+
   // 신구 비교 강조: 새 조문은 통째로 초록 밑줄, 번호만 옮겨진 조문은 바뀐 곳만 표시한다
   function highlightBlock(f, d) {
     const moved = f.type === 'rule' ? (d.rule.moved || []) : [];
-    return h('details', { class: 'hl-details', open: 'open' },
+    return h('details', { class: 'hl-details' },
       h('summary', {}, '신구 비교 강조'),
       h('div', { class: 'details-body' },
-        h('p', { class: 'caption' }, '초록 밑줄은 새로 생긴 내용, 빨간 취소선은 없어진 내용이에요.'),
+        h('p', { class: 'caption' }, '초록 밑줄은 새로 생긴 내용, 빨간 취소선은 없어진 내용이에요. [본조신설]·<개정 …> 같은 개정 이력 표시는 비교에서 뺐어요.'),
         h('div', { class: 'doc-label' }, `${f.rule.name} ${f.rule.label} · ${f.rule.kind} (이전 판에 없던 조문이라 전체가 새 내용이에요)`),
-        h('div', { class: 'doc diff' }, h('ins', {}, stripHeading(f.rule.text))),
+        h('div', { class: 'doc diff' }, h('ins', {}, withoutHistory(stripHeading(f.rule.text)))),
         moved.flatMap((m) => [
           h('div', { class: 'doc-label' }, `${m.fromLabel} → ${m.toLabel} · 번호가 옮겨진 조문 (바뀐 곳만 표시해요)`),
-          h('div', { class: 'doc diff' }, diffNodes(m.before, m.after)),
+          h('div', { class: 'doc diff' }, diffNodes(withoutHistory(m.before), withoutHistory(m.after))),
         ])));
   }
 
@@ -207,11 +210,12 @@
         h('div', { class: 'doc' }, stripHeading(f.rule.text)),
         after.articles[0] ? [h('div', { class: 'doc-label' }, `성북구 조례 ${after.articles[0].label} (${after.ver})`), h('div', { class: 'doc' }, stripHeading(after.articles[0].text))] : null));
     if (f.type === 'rule') {
-      card.append(
-        h('div', { class: 'sec-head' }, h('h3', {}, `${f.rule.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.rule.changedCount}개`)),
-        h('div', { class: 'tags' }, d.rule.changed.map((c) => badge(`${c.label} ${c.kind}`, c.delegatesToOrdinance ? 'warn' : ''))),
-        h('div', { class: 'sec-head' }, h('h3', {}, `${d.ordinance.to.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.ordinance.changedCount}개`)),
-        h('div', { class: 'tags' }, d.ordinance.changed.filter((c) => c.label.startsWith('제')).map((c) => badge(`${c.label} ${c.kind}`))));
+      card.append(h('details', {}, h('summary', {}, '이번 개정에서 바뀐 조문 목록'),
+        h('div', { class: 'details-body' },
+          h('div', { class: 'sec-head' }, h('h3', {}, `${f.rule.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.rule.changedCount}개`)),
+          h('div', { class: 'tags' }, d.rule.changed.map((c) => badge(`${c.label} ${c.kind}`, c.delegatesToOrdinance ? 'warn' : ''))),
+          h('div', { class: 'sec-head' }, h('h3', {}, `${d.ordinance.to.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.ordinance.changedCount}개`)),
+          h('div', { class: 'tags' }, d.ordinance.changed.filter((c) => c.label.startsWith('제')).map((c) => badge(`${c.label} ${c.kind}`))))));
     }
     card.append(h('p', { class: 'caption mt-16' }, d.notice));
     return card;
@@ -304,7 +308,7 @@
       'Notification' in window && Notification.permission === 'default'
         ? h('button', { type: 'button', class: 'text-btn', onclick: async () => { await Notification.requestPermission(); renderInbox(d); } }, '브라우저 알림 켜기') : null);
     box.replaceChildren(head, list, actions,
-      h('p', { class: 'caption' }, `법제처 변경이력을 ${d.history?.mode || ''} 기준으로 보여 줘요. 이 화면을 열어 둔 동안 10분마다 새로 확인해요.`));
+      h('p', { class: 'caption' }, `이 알림은 법제처의 현재 개정 이력(${d.history?.mode || ''}) 기준이에요. 개정 비교는 2019. 12. 31. 시연 기준일이라 시점이 달라요. 이 화면을 열어 둔 동안 10분마다 새로 확인해요.`));
   }
 
   async function refreshInbox() {
@@ -347,13 +351,13 @@
       pushBtn.disabled = false;
     } }, '웹 푸시 켜기');
     const ready = cfg.email || cfg.push;
-    box.replaceChildren(
+    box.replaceChildren(...[
       h('h3', { class: 'inbox-sub-title' }, '닫아도 알림 받기'),
       ready ? null : h('p', { class: 'caption' }, '이메일·웹 푸시 알림은 준비하고 있어요.'),
       h('div', { class: 'inbox-sub-form' }, input, mailBtn, pushBtn),
       !pushSupported ? h('p', { class: 'caption' }, '이 브라우저는 웹 푸시를 지원하지 않아요.') : null,
       h('p', { class: 'caption' }, '법령이 개정되면 하루 한 번 확인해서 알려 드려요. 이메일은 알림 보내는 데만 쓰고, 메일의 링크로 언제든 해지할 수 있어요.'),
-      msg);
+      msg].filter(Boolean)); // replaceChildren 은 null 을 "null" 글자로 넣어 버린다
   }
 
   async function loadLaw() {
@@ -460,6 +464,11 @@
       id: `${f.rule.code}|${f.rule.label}`, title: `${f.rule.name} ${f.rule.label}`,
       sub: `${f.ordinance.before.name} · 시행 ${fmt(f.rule.date)}`, date: f.rule.date, review: f.status, open: !f.ordinance.before.found,
     }));
+    // 조례 쪽에서 담당자가 직접 할 일 (근거 문서에 없는 일반 작업이라 번호·기한은 담당자가 정한다)
+    const ordName = findings[0]?.ordinance.before.name || '성북구 폐기물 관리 조례';
+    const baseDate = findings.find((f) => f.type === 'rule')?.rule.date || '';
+    ['안전기준 예외 사유를 정하는 조문 마련', '조문 번호 방안 결정과 기존 조문 번호 정리', '번호가 바뀌는 조문의 인용 조문 점검', '신구조문 대비표 · 개정안 작성', '부칙(시행일 · 경과조치) 작성']
+      .forEach((title, i) => items.push({ id: `task|${i + 1}`, title: `조례 작업 · ${title}`, sub: `${ordName} · 직접 할 일`, date: baseDate, review: '할 일', open: false, task: true }));
     const data = readBoard();
     const entry = (id) => (data[id] = cleanEntry(data[id]));
     const ui = { q: '', status: '전체', sort: 'due' };
@@ -482,7 +491,7 @@
       const id = (key) => `bf-${idx}-${key}`;
       drawLog();
       return h('div', { class: 'review-card board-card' },
-        h('div', { class: 'review-top' }, h('h3', {}, it.title), h('div', { class: 'tags' }, badge(it.review, it.review === '검토 필요' ? 'warn' : 'ok'), it.open ? badge('조례 미정비', 'warn') : null)),
+        h('div', { class: 'review-top' }, h('h3', {}, it.title), h('div', { class: 'tags' }, it.task ? badge('조례 작업', 'demo') : [badge(it.review, it.review === '검토 필요' ? 'warn' : 'ok'), it.open ? badge('조례 미정비', 'warn') : null])),
         h('p', { class: 'caption' }, it.sub),
         h('div', { class: 'bf-grid' },
           field('status', '진행 상태', h('select', { class: 'field', id: id('status'), onchange: (ev) => save('status', ev.target.value) }, STATUSES.map((st) => h('option', { value: st, selected: st === e.status ? 'selected' : null }, st)))),
@@ -528,7 +537,7 @@
       list,
       h('div', { class: 'board-actions' },
         h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => {
-          const rows = [['법령', '연결 조례', '시행일', '진행 상태', '담당자', '기한', '협의 부서', '메모'], ...items.map((it) => { const e = entry(it.id); return [it.title, it.sub.split(' · ')[0], fmt(it.date), e.status, e.owner, e.due, e.dept, e.memo]; })];
+          const rows = [['법령', '연결 조례', '시행일', '진행 상태', '담당자', '기한', '협의 부서', '메모'], ...items.map((it) => { const e = entry(it.id); return [it.title, it.sub.split(' · ')[0], it.task ? '' : fmt(it.date), e.status, e.owner, e.due, e.dept, e.memo]; })];
           saveFile(`법령개정-현황판-${today}.csv`, 'text/csv;charset=utf-8', '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n'));
         } }, '표(CSV)로 내보내기'),
         h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => saveFile(`법령개정-현황판-${today}.json`, 'application/json', JSON.stringify({ app: 'law-alert-board', version: 1, savedAt: new Date().toISOString(), items: Object.fromEntries(items.map((it) => [it.id, entry(it.id)])) }, null, 2)) }, '파일로 내보내기'),
@@ -541,14 +550,32 @@
   const TABS = [['ask', '질문·답변'], ['compare', '개정 비교'], ['law', '현행 확인'], ['board', '현황판']];
   function setupTabs() {
     const nav = $('#tabs');
+    nav.setAttribute('role', 'tablist');
+    const buttons = [];
     const show = (id) => {
-      for (const [k] of TABS) { const sec = $(`#${k}-zone`); if (sec) sec.hidden = k !== id; }
-      nav.querySelectorAll('button').forEach((b) => { const on = b.dataset.tab === id; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+      for (const [k] of TABS) { const sec = $(`#${k}-zone`); if (sec) { sec.hidden = k !== id; sec.setAttribute('role', 'tabpanel'); sec.setAttribute('aria-labelledby', `tab-${k}`); } }
+      buttons.forEach((b) => { const on = b.dataset.tab === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
     };
-    nav.replaceChildren(...TABS.map(([k, label]) => h('button', { type: 'button', 'data-tab': k, onclick: () => { history.replaceState(null, '', '#' + k); show(k); window.scrollTo({ top: 0 }); } }, label)));
+    const go = (k, focus) => { history.replaceState(null, '', '#' + k); show(k); if (focus) buttons.find((b) => b.dataset.tab === k).focus(); };
+    TABS.forEach(([k, label]) => {
+      const b = h('button', { type: 'button', role: 'tab', id: `tab-${k}`, 'aria-controls': `${k}-zone`, 'data-tab': k, onclick: () => { go(k); window.scrollTo({ top: 0 }); } }, label);
+      buttons.push(b);
+    });
+    nav.replaceChildren(...buttons);
+    // 방향키 · Home · End 로 탭 이동
+    nav.addEventListener('keydown', (ev) => {
+      const i = buttons.findIndex((b) => b === document.activeElement);
+      if (i < 0) return;
+      const next = { ArrowRight: (i + 1) % buttons.length, ArrowLeft: (i - 1 + buttons.length) % buttons.length, Home: 0, End: buttons.length - 1 }[ev.key];
+      if (next === undefined) return;
+      ev.preventDefault(); go(buttons[next].dataset.tab, true);
+    });
     const fromHash = () => { const k = (location.hash || '').slice(1); return TABS.some(([t]) => t === k) ? k : 'ask'; };
     window.addEventListener('hashchange', () => show(fromHash()));
     show(fromHash());
+    // "본문으로 건너뛰기": 주소의 # 값이 바뀌면 탭이 초기화되므로 링크 대신 포커스만 옮긴다
+    const skip = $('.skip');
+    if (skip) skip.addEventListener('click', (ev) => { ev.preventDefault(); const m = $('#main'); m.setAttribute('tabindex', '-1'); m.focus(); });
   }
 
   setupTabs();
