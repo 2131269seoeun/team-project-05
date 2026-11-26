@@ -24,7 +24,9 @@
   --orange-text: oklch(0.5 0.13 56);
   --orange-wash: oklch(0.95 0.05 70);
   --press: rgba(0, 0, 0, 0.26);
-  --bg: var(--grey-50);
+  --bg: #0b1f4b;          /* 남색 배경 */
+  --on-bg: #ffffff;
+  --on-bg-sub: #c9d3ea;
   --surface: var(--white);
   --text: var(--grey-900);
   --text-sub: var(--grey-700);
@@ -51,7 +53,7 @@
     --grey-100: #2c2c35;
     --grey-50: #202027;
     --white: #202027;
-    --bg: oklch(0.174 0.006 286);
+    --bg: #0b1f4b;
     --surface: oklch(0.247 0.013 285);
     --blue-text: #8bb8ff;
     --red-text: #ff9aa2;
@@ -77,6 +79,10 @@ body {
   word-break: keep-all;       /* 한글은 단어 단위로 줄바꿈 */
   overflow-wrap: anywhere;
 }
+/* 남색 배경 위에 바로 놓이는 글씨 */
+main > section > h1, main > section > h2 { color: var(--on-bg); }
+main > section > .lead, .privacy, .footer { color: var(--on-bg-sub); }
+.privacy a, .footer a { color: var(--on-bg); }
 .num { font-variant-numeric: tabular-nums; }
 
 button, input { font: inherit; color: inherit; }
