@@ -174,50 +174,12 @@
       h('div', {}, link));
   }
 
-
-  // ---------- 알림함: 법제처 변경이력에 새 개정이 올라오면 왼쪽 알림함에 보여 준다 ----------
-  // 읽음 표시는 이 브라우저(localStorage)에만 저장한다. 서버에는 개인 정보를 보내지 않는다.
-  const SEEN_KEY = 'law-alert-seen';
-  const readSeen = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); } };
-  const writeSeen = (set) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify([...set])); } catch { /* 저장 못 해도 화면은 동작 */ } };
-  let knownKeys = null; // 이 화면에서 이미 본 개정 — 새로 생긴 것만 브라우저 알림으로 띄운다
-
-  function renderInbox(d) {
-    const box = $('#inbox');
-    const items = (d.history?.data || []).slice(0, 6).map((x) => ({ ...x, key: `${x.name}|${x.number}|${x.effective}` }));
-    const seen = readSeen();
-    const unread = items.filter((x) => !seen.has(x.key));
-    if (knownKeys && 'Notification' in window && Notification.permission === 'granted') {
-      for (const x of unread.filter((u) => !knownKeys.has(u.key))) new Notification('법령 개정 알림', { body: `${x.name} ${x.number} · ${x.effective} 시행` });
-    }
-    knownKeys = new Set(items.map((x) => x.key));
-
-    const head = h('div', { class: 'inbox-head' }, h('h2', {}, '알림'), unread.length ? h('span', { class: 'inbox-count num', 'aria-label': `읽지 않은 알림 ${unread.length}개` }, unread.length) : null);
-    const list = items.length
-      ? h('div', { class: 'inbox-list' }, items.map((x) => h('a', { class: 'inbox-item' + (seen.has(x.key) ? '' : ' unread'), href: x.link || '#', target: '_blank', rel: 'noopener noreferrer' },
-          h('div', { class: 't' }, `${x.name} ${x.change || '개정'}`),
-          h('div', { class: 's num' }, [x.number, x.effective && `${x.effective} 시행`].filter(Boolean).join(' · ')),
-          h('div', { class: 's' }, x.name === '폐기물관리법 시행규칙' || x.name === '폐기물관리법' ? '성북구 조례에서 함께 검토할 부분이 있는지 확인해 보세요.' : '내용을 확인해 보세요.'))))
-      : h('p', { class: 'caption' }, '아직 새 알림이 없어요.');
-    const actions = h('div', { class: 'inbox-actions' },
-      unread.length ? h('button', { type: 'button', class: 'text-btn', onclick: () => { items.forEach((x) => seen.add(x.key)); writeSeen(seen); renderInbox(d); } }, '모두 읽음') : null,
-      'Notification' in window && Notification.permission === 'default'
-        ? h('button', { type: 'button', class: 'text-btn', onclick: async () => { await Notification.requestPermission(); renderInbox(d); } }, '브라우저 알림 켜기') : null);
-    box.replaceChildren(head, list, actions,
-      h('p', { class: 'caption' }, `법제처 변경이력을 ${d.history?.mode || ''} 기준으로 보여 줘요. 이 화면을 열어 둔 동안 10분마다 새로 확인해요.`));
-  }
-
-  async function refreshInbox() {
-    try { renderInbox(await (await fetch('/api/law')).json()); } catch { /* 다음 확인 때 다시 시도 */ }
-  }
-
   async function loadLaw() {
     const mount = $('#law');
     mount.replaceChildren(h('div', { class: 'card' }, dots()));
     try {
       const res = await fetch('/api/law');
       const d = await res.json();
-      renderInbox(d);
       const card = h('div', { class: 'card' });
       if (d.behind?.length) {
         card.append(h('h3', {}, '근거 문서보다 새로운 판이 있어요'),
@@ -245,5 +207,4 @@
 
   loadCompare();
   loadLaw();
-  setInterval(refreshInbox, 10 * 60 * 1000);
 })();
