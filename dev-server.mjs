@@ -37,6 +37,7 @@ const server = http.createServer(async (req, res) => {
       req.body = await readBody(req);
       req.query = Object.fromEntries(url.searchParams);
       res.status = (code) => { res.statusCode = code; return res; };
+      res.send = (body) => { res.end(body); return res; };
       res.json = (obj) => { res.setHeader('content-type', 'application/json; charset=utf-8'); res.end(JSON.stringify(obj)); return res; };
       const mod = await import(pathToFileURL(file).href);
       return await mod.default(req, res);
