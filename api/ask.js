@@ -18,6 +18,26 @@ function storedAnswer(question) {
   return stored?.answers?.[key] ? { savedAt: stored.savedAt, ...stored.answers[key] } : null;
 }
 
+// AI 를 부르는 질문은 접속자(IP) 한 명이 1분에 5번까지만 받는다 — 누군가 반복 호출해서 AI 사용료가 늘어나는 것을 막는다.
+// 서버가 여러 개로 나뉘면 개수가 따로 세어져서 허술하므로, Vercel 방화벽 속도 제한을 함께 걸면 더 확실하다.
+// 저장된 답(예시 질문)과 "문서에 없어요" 답은 AI 를 부르지 않으니 세지 않는다.
+const LIMIT = 5;
+const WINDOW_MS = 60_000;
+const hits = new Map();
+function clientId(req) {
+  const h = req.headers || {};
+  const raw = h['x-vercel-forwarded-for'] || h['x-real-ip'] || h['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+  return String(raw).split(',')[0].trim().slice(0, 64);
+}
+// 이 접속자가 한도를 넘었으면 다시 시도할 수 있을 때까지 남은 초를 돌려주고, 아니면 0 을 돌려주며 한 번 센다
+function overLimit(id, now = Date.now()) {
+  if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < WINDOW_MS)) hits.delete(k); // 오래된 기록 정리
+  const recent = (hits.get(id) || []).filter((t) => now - t < WINDOW_MS);
+  if (recent.length >= LIMIT) { hits.set(id, recent); return Math.ceil((WINDOW_MS - (now - recent[0])) / 1000); }
+  recent.push(now); hits.set(id, recent);
+  return 0;
+}
+
 const CONTACT = '성북구청 대표전화 02-2241-3114 (120 다산콜센터로 연결)';
 const NOTICE = '2019~2021년 기준 자료이며 현행 법령과 다를 수 있어요.';
 
@@ -100,6 +120,12 @@ export default async function handler(req, res) {
       answer: `문서에 없어요. 지금 가진 근거 문서(폐기물관리법·시행규칙·성북구 조례의 2019~2021년판)에서 이 질문의 답을 찾지 못했어요.\n문의처: ${CONTACT}`,
       sources: [], ai: null, notice: NOTICE,
     });
+  }
+
+  const wait = overLimit(clientId(req));
+  if (wait) {
+    res.setHeader('Retry-After', String(wait));
+    return res.status(429).json({ error: `질문이 너무 빨리 이어지고 있어요. ${wait}초 뒤에 다시 물어봐 주세요.` });
   }
 
   const context = r.chunks.map((c, i) => `[자료 ${i + 1}] 문서: ${c.name} / 판: ${c.ver} / 조문: ${c.heading}\n${c.body}`).join('\n\n---\n\n');

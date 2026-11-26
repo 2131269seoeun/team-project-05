@@ -7,7 +7,8 @@ import { sectionHistory } from './law.js';
 export default async function handler(req, res) {
   const secret = (process.env.CRON_SECRET || '').trim();
   if (!secret || req.headers.authorization !== `Bearer ${secret}`) return res.status(401).json({ error: '권한이 없어요' });
-  if (!storeReady()) return res.status(503).json({ error: '저장소가 연결되지 않았어요' });
+  // 알림 저장소(Upstash)를 아직 연결하지 않았으면 오류로 남기지 않고 조용히 건너뛴다 — 연결하면 코드 수정 없이 동작한다
+  if (!storeReady()) return res.status(200).json({ skipped: '알림 저장소를 아직 연결하지 않아 건너뛰었어요' });
 
   let rows;
   try { rows = await sectionHistory(); } catch (e) { return res.status(200).json({ skipped: `법제처 확인 실패: ${e.message}` }); }

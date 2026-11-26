@@ -11,6 +11,14 @@ const ORD_NAME = '서울특별시 성북구 폐기물 관리 조례';
 
 class LawError extends Error {}
 
+// 화면에는 키·승인 같은 내부 설정 상태를 말하지 않고, 정확한 이유는 서버 로그(console.error)에만 남긴다
+const PUBLIC_REASONS = new Set(['시간 초과', '연결 실패', '결과 없음']);
+function publicReason(e, where) {
+  const msg = e instanceof LawError ? e.message : '알 수 없는 오류';
+  console.error(`[법제처 연결 실패] ${where}: ${msg}`);
+  return PUBLIC_REASONS.has(msg) ? msg : '지금은 연결하지 못했어요';
+}
+
 async function fetchText(url) {
   let res;
   try {
@@ -124,7 +132,7 @@ async function noticeSection() {
   try {
     return { mode: '실시간', data: await sectionNotice(), link: LAWMAKING_SITE };
   } catch (e) {
-    return { mode: '준비 중', reason: e instanceof LawError ? e.message : '알 수 없는 오류', data: [], link: LAWMAKING_SITE };
+    return { mode: '준비 중', reason: publicReason(e, '입법예고'), data: [], link: LAWMAKING_SITE };
   }
 }
 
@@ -141,7 +149,7 @@ async function section(fn, demo, snapName) {
   try {
     return { mode: '실시간', data: await fn() };
   } catch (e) {
-    const reason = e instanceof LawError ? e.message : '알 수 없는 오류';
+    const reason = publicReason(e, snapName || '조회');
     const snap = snapName && snapshot(snapName);
     if (snap) return { mode: '저장된 확인값', savedAt: snap.savedAt, reason, data: snap.data };
     return { mode: '시연 값', reason, data: demo };
