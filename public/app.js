@@ -177,6 +177,43 @@
   const titleOfHeading = (heading) => (heading.match(/\(([^)]*)\)/) || [])[1] || '';
   const cardSummary = (f) => (f.type === 'law' ? '구체적인 기준을 환경부령에 맡긴 상위 조문이에요.' : '예외 사유를 조례로 정하도록 맡긴 조문이에요.');
 
+
+  // 법 → 시행규칙 → 조례로 이어지는 맡김 흐름을 한 줄로 보여 준다 (지금 보는 항목에 파란 테두리)
+  function chainBlock(f, d) {
+    const lawF = d.findings.find((x) => x.type === 'law');
+    const ruleF = d.findings.find((x) => x.type === 'rule') || f;
+    const ord = ruleF.ordinance.before;
+    const node = (on, kind, title, sub, tail) => h('li', { class: 'chain-node' + (on ? ' on' : '') },
+      h('div', { class: 'caption' }, kind), h('div', { class: 't' }, title), h('div', { class: 's' }, sub), tail);
+    return h('div', { class: 'chain-box' },
+      h('div', { class: 'chain-title' }, '맡김 흐름 ', h('span', { class: 'caption' }, '법이 조례에 맡긴 내용이 어디까지 이어졌는지')),
+      h('ol', { class: 'chain' },
+        lawF ? node(f.type === 'law', `법률 · ${fmt(lawF.rule.date)} 시행`, `${lawF.rule.name} ${lawF.rule.label}`, '안전기준의 세부 내용을 환경부령에 맡김') : null,
+        node(f.type === 'rule', `시행규칙 · ${fmt(ruleF.rule.date)} 시행`, `${ruleF.rule.name} ${ruleF.rule.label}`, '예외 사유를 조례로 정하도록 맡김'),
+        node(false, `성북구 조례 · ${ord.ver.split(' · ')[0].replace('조례 ', '')}`, ord.found ? `관련 조문 ${ord.articles.map((a) => a.label).join(', ')}` : '해당 규정 없음',
+          ord.found ? '맡긴 내용을 정한 조문이 있어요' : '예외 사유의 조례상 근거가 비어 있어요', ord.found ? null : badge('검토 필요', 'warn'))));
+  }
+
+  // 검토 상태를 개정 비교 화면에서 바로 바꾼다 (현황판과 같은 저장소를 쓴다)
+  let refreshQuickStatus = null;
+  function quickStatus(f) {
+    const id = `${f.rule.code}|${f.rule.label}`;
+    const note = h('span', { class: 'caption', role: 'status' });
+    const sel = h('select', { class: 'field qs-select', id: 'quick-status', 'aria-label': '검토 상태' }, STATUSES.map((st) => h('option', { value: st }, st)));
+    const current = () => cleanEntry(readBoard()[id]).status;
+    sel.value = current();
+    refreshQuickStatus = () => { sel.value = current(); };
+    sel.addEventListener('change', () => {
+      const all = readBoard(); const e = cleanEntry(all[id]); const old = e.status;
+      if (old === sel.value) return;
+      e.status = sel.value; e.log = [...e.log, { at: stamp(), text: `진행 상태: ${old} → ${e.status}` }].slice(-100);
+      all[id] = e;
+      note.textContent = writeBoard(all) ? ' 현황판에도 반영했어요' : ' 저장하지 못했어요';
+      window.dispatchEvent(new CustomEvent('law-board-changed', { detail: { source: 'compare' } }));
+    });
+    return h('div', { class: 'qs' }, h('label', { for: 'quick-status' }, '검토 상태'), sel, note);
+  }
+
   // 검토 항목 한 건의 상세: 3단계 흐름 + 본문 + 대비표 틀 + 신구 비교 강조
   function renderFinding(f, d) {
     const card = h('div', { class: 'card' });
@@ -186,6 +223,8 @@
 
     card.append(
       h('div', { class: 'meta' }, modeBadge(d.mode), badge(f.status, f.status === '검토 필요' ? 'warn' : 'ok')),
+      quickStatus(f),
+      chainBlock(f, d),
       h('ol', { class: 'steps' },
         h('li', { class: 'step' }, h('span', { class: 'node' }, '1'),
           h('div', {}, h('div', { class: 'date num' }, fmt(f.rule.date) + ' 시행'),
@@ -474,6 +513,7 @@
     const ui = { q: '', status: '전체', sort: 'due' };
     const note = h('p', { class: 'caption', role: 'status' });
     const list = h('div', { class: 'board-list' });
+    const summary = h('div', { class: 'board-summary', role: 'group', 'aria-label': '진행 상태별 개수' });
     const persist = () => { note.textContent = writeBoard(data) ? '' : '이 브라우저에 저장하지 못했어요. 파일로 내보내 두세요.'; };
 
     function card(it, idx) {
@@ -486,6 +526,7 @@
         const text = key === 'memo' ? '메모를 고쳤어요' : `${FIELD[key]}: ${e[key] || '비어 있음'} → ${value || '비어 있음'}`;
         e[key] = value; e.log = [...e.log, { at: stamp(), text }].slice(-100);
         persist(); drawLog();
+        if (key === 'status') { drawSummary(); window.dispatchEvent(new CustomEvent('law-board-changed', { detail: { source: 'board' } })); }
       };
       const field = (key, label, control) => h('div', { class: 'bf' }, h('label', { for: `bf-${idx}-${key}` }, label), control);
       const id = (key) => `bf-${idx}-${key}`;
@@ -500,6 +541,16 @@
           field('dept', '협의 부서', h('input', { class: 'field', id: id('dept'), type: 'text', maxlength: '80', placeholder: '예: 청소행정과, 법무 담당', value: e.dept, onchange: (ev) => save('dept', ev.target.value.trim()) }))),
         field('memo', '메모', h('textarea', { class: 'field memo', id: id('memo'), maxlength: '2000', rows: '3', placeholder: '협의 내용, 확인할 사항', onchange: (ev) => save('memo', ev.target.value) }, e.memo)),
         logBox);
+    }
+
+    // 상태별 개수 — 누르면 그 상태만 보여 준다
+    const statusSelect = () => document.getElementById('board-status');
+    function drawSummary() {
+      const counts = Object.fromEntries(STATUSES.map((st) => [st, 0]));
+      for (const it of items) counts[entry(it.id).status]++;
+      const chip = (label, n, value) => h('button', { type: 'button', class: 'sum-chip' + (ui.status === value ? ' on' : ''), 'aria-pressed': String(ui.status === value), onclick: () => { ui.status = ui.status === value ? '전체' : value; const sel = statusSelect(); if (sel) sel.value = ui.status; drawSummary(); draw(); } },
+        h('span', { class: 'n num' }, n), h('span', {}, label));
+      summary.replaceChildren(chip('전체', items.length, '전체'), ...STATUSES.map((st) => chip(st, counts[st], st)));
     }
 
     const dueKey = (it) => entry(it.id).due || '9999-99-99';
@@ -522,7 +573,7 @@
         if (obj?.app !== 'law-alert-board' || !obj.items || typeof obj.items !== 'object') throw new Error('format');
         let n = 0;
         for (const it of items) if (obj.items[it.id]) { data[it.id] = cleanEntry(obj.items[it.id]); n++; }
-        persist(); draw(); note.textContent = `${n}개 항목을 불러왔어요.`;
+        persist(); drawSummary(); draw(); note.textContent = `${n}개 항목을 불러왔어요.`;
       } catch { note.textContent = '이 서비스에서 내보낸 파일이 아니거나 읽을 수 없어요.'; }
     });
 
@@ -532,8 +583,9 @@
         '입력한 내용은 이 브라우저에만 저장돼요. 다른 담당자와 나누려면 "파일로 내보내기"로 파일을 전달하고, 받는 쪽은 "파일 불러오기"를 써요. 브라우저 데이터를 지우면 사라지니 가끔 내보내 두세요. 여러 명이 함께 쓰는 서버 저장은 아직 없어요.'),
       h('div', { class: 'board-filter' },
         h('div', { class: 'bf' }, h('label', { for: 'board-q' }, '검색'), h('input', { class: 'field', id: 'board-q', type: 'search', placeholder: '법령, 담당자, 부서, 메모', oninput: (ev) => { ui.q = ev.target.value; draw(); } })),
-        h('div', { class: 'bf' }, h('label', { for: 'board-status' }, '진행 상태'), h('select', { class: 'field', id: 'board-status', onchange: (ev) => { ui.status = ev.target.value; draw(); } }, ['전체', ...STATUSES].map((st) => h('option', { value: st }, st)))),
+        h('div', { class: 'bf' }, h('label', { for: 'board-status' }, '진행 상태'), h('select', { class: 'field', id: 'board-status', onchange: (ev) => { ui.status = ev.target.value; drawSummary(); draw(); } }, ['전체', ...STATUSES].map((st) => h('option', { value: st }, st)))),
         h('div', { class: 'bf' }, h('label', { for: 'board-sort' }, '정렬'), h('select', { class: 'field', id: 'board-sort', onchange: (ev) => { ui.sort = ev.target.value; draw(); } }, h('option', { value: 'due' }, '기한 빠른 순'), h('option', { value: 'date' }, '법령 시행일 순')))),
+      summary,
       list,
       h('div', { class: 'board-actions' },
         h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => {
@@ -543,8 +595,13 @@
         h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => saveFile(`법령개정-현황판-${today}.json`, 'application/json', JSON.stringify({ app: 'law-alert-board', version: 1, savedAt: new Date().toISOString(), items: Object.fromEntries(items.map((it) => [it.id, entry(it.id)])) }, null, 2)) }, '파일로 내보내기'),
         h('label', { class: 'btn btn-m btn-secondary file-btn', for: 'board-file' }, '파일 불러오기'), fileInput),
       note);
+    if (boardListener) window.removeEventListener('law-board-changed', boardListener);
+    boardListener = (ev) => { if (ev.detail?.source === 'board') return; for (const [k, v] of Object.entries(readBoard())) data[k] = cleanEntry(v); drawSummary(); draw(); };
+    window.addEventListener('law-board-changed', boardListener);
+    drawSummary();
     draw();
   }
+  let boardListener = null;
 
   // ---------- 화면 단계 탭 ----------
   const TABS = [['ask', '질문·답변'], ['compare', '개정 비교'], ['law', '현행 확인'], ['board', '현황판']];
@@ -570,8 +627,16 @@
       if (next === undefined) return;
       ev.preventDefault(); go(buttons[next].dataset.tab, true);
     });
+    // 각 화면 맨 아래: 이전·다음 단계로 이동
+    TABS.forEach(([k], i) => {
+      const sec = $(`#${k}-zone`);
+      if (!sec) return;
+      const step = (j, dir) => (TABS[j] ? h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => { go(TABS[j][0]); window.scrollTo({ top: 0 }); } }, dir === 'prev' ? `이전: ${TABS[j][1]}` : `다음: ${TABS[j][1]}`) : null);
+      sec.append(h('div', { class: 'step-nav' }, step(i - 1, 'prev'), step(i + 1, 'next')));
+    });
     const fromHash = () => { const k = (location.hash || '').slice(1); return TABS.some(([t]) => t === k) ? k : 'ask'; };
     window.addEventListener('hashchange', () => show(fromHash()));
+    window.addEventListener('law-board-changed', (ev) => { if (ev.detail?.source !== 'compare' && refreshQuickStatus) refreshQuickStatus(); });
     show(fromHash());
     // "본문으로 건너뛰기": 주소의 # 값이 바뀌면 탭이 초기화되므로 링크 대신 포커스만 옮긴다
     const skip = $('.skip');
