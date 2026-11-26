@@ -63,7 +63,7 @@ async function sectionCurrent() {
   return rows;
 }
 
-export async function sectionHistory() {
+async function sectionHistory() {
   const j = await lawJson({ target: 'law', nw: '1', display: '100', query: '폐기물관리법' });
   const rows = list(j.LawSearch?.law).filter((x) => NAMES.includes(x.법령명한글)).map(lawRow);
   rows.sort((a, b) => b.effective.localeCompare(a.effective, 'en', { numeric: true }));
