@@ -62,6 +62,15 @@ function ordinanceLinks(code, label) {
     .map((a) => ({ label: a.label, heading: a.heading, body: a.body }));
 }
 
+// 공포일: 그 판의 부칙 머리글 "<제843호, 2019. 12. 31.>"에서 읽는다 (판 번호가 같은 것만)
+function promulgated(code, no) {
+  for (const a of articles(code)) {
+    const m = a.label.match(/<제(\d+)호,\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./);
+    if (m && Number(m[1]) === no) return `${m[2]}-${m[3].padStart(2, '0')}-${m[4].padStart(2, '0')}`;
+  }
+  return null;
+}
+
 // 개정 후 판에서 번호만 옮겨진 조문의 개정 전 원문을 찾는다 (신구조문 대비표의 "현행" 칸)
 function movedPairs() {
   const before = articles('ord1349');
@@ -102,7 +111,7 @@ function lawFinding() {
   const pack = (v, code, list, withText) => ({ ...v, code, found: list.length > 0, articles: list.map(({ label, heading, body }) => (withText ? { label, heading, text: body } : { label, heading })) });
   return {
     type: 'law',
-    rule: { code: 'law16318', ...VERSIONS.law16318, label: a.label, heading: a.heading, kind: '신설', text: a.body, delegatesTo: '환경부령', sentence: ((a.body.match(/[^.\n]*환경부령으로 정[^.\n]*/) || [''])[0]).trim() || null },
+    rule: { code: 'law16318', ...VERSIONS.law16318, promulgated: promulgated('law16318', 16318), label: a.label, heading: a.heading, kind: '신설', text: a.body, delegatesTo: '환경부령', sentence: ((a.body.match(/[^.\n]*환경부령으로 정[^.\n]*/) || [''])[0]).trim() || null },
     ordinance: { before: pack(VERSIONS.ord1349, 'ord1349', before, false), after: pack(VERSIONS.ord1396, 'ord1396', after, true) },
     status: before.length === 0 ? '검토 필요' : '확인됨',
     gap: after.length ? monthsBetween(VERSIONS.law16318.date, VERSIONS.ord1396.date) : null,
@@ -128,7 +137,7 @@ export default async function handler(req, res) {
     const gap = after.length ? monthsBetween(VERSIONS.rule843.date, VERSIONS.ord1396.date) : null;
     return {
       type: 'rule',
-      rule: { code: 'rule843', ...VERSIONS.rule843, label: d.label, heading: d.heading, kind: d.kind, text: d.body },
+      rule: { code: 'rule843', ...VERSIONS.rule843, promulgated: promulgated('rule843', 843), label: d.label, heading: d.heading, kind: d.kind, text: d.body },
       ordinance: {
         before: { ...VERSIONS.ord1349, code: 'ord1349', found: before.length > 0, articles: before.map(({ label, heading }) => ({ label, heading })) },
         after: { ...VERSIONS.ord1396, code: 'ord1396', found: after.length > 0, articles: after.map(({ label, heading, body }) => ({ label, heading, text: body })) },

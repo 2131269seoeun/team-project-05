@@ -214,6 +214,35 @@
     return h('div', { class: 'qs' }, h('label', { for: 'quick-status' }, '검토 상태'), sel, note);
   }
 
+
+  // 지금 보는 위치 (개정 비교 › 항목 › 신구법 비교)
+  function crumbs(f) {
+    return h('nav', { class: 'crumbs', 'aria-label': '현재 위치' },
+      h('ol', {}, h('li', {}, h('button', { type: 'button', class: 'text-btn', onclick: () => window.scrollTo({ top: 0, behavior: 'smooth' }) }, '개정 비교')),
+        h('li', {}, `${f.rule.name} ${f.rule.label}`), h('li', { 'aria-current': 'step' }, '신구법 비교')));
+  }
+
+  // 공포일과 시행일 설명 — 이 서비스는 시행일 기준
+  function dateBox(f) {
+    const pub = f.rule.promulgated;
+    return h('div', { class: 'datebox' },
+      h('div', { class: 'datebox-title' }, '날짜 보는 법'),
+      h('dl', {}, h('dt', {}, '공포일'), h('dd', { class: 'num' }, pub ? `${fmt(pub)} · 법령을 공표한 날` : '문서에서 찾지 못했어요'),
+        h('dt', {}, '시행일'), h('dd', { class: 'num' }, `${fmt(f.rule.date)} · 효력이 생기는 날`)),
+      h('p', { class: 'caption' }, `${pub && pub === f.rule.date ? '이 개정은 공포일과 시행일이 같아요. ' : pub ? '이 개정은 공포일과 시행일이 달라요. ' : ''}이 서비스는 시행일을 기준으로 봐요.`));
+  }
+
+  // 개정 전에는 같은 번호가 다른 조문이었던 경우를 풀어 준다
+  function sameNumberNote(f, d) {
+    const m = f.type === 'rule' ? (d.rule.moved || []).find((x) => x.fromLabel === f.rule.label) : null;
+    if (!m) return null;
+    const title = (m.before.split('\n')[0].match(/\(([^)]*)\)/) || [])[1] || '';
+    const ordRows = (f.table?.rows || []).filter((r) => r.current);
+    return h('div', { class: 'notice-box same-no' }, h('strong', {}, '같은 번호, 다른 조문  '),
+      `${f.rule.label}은 개정 전 판에서는 「${title}」 조문이었고, 이번 개정으로 ${m.toLabel}${/[360]$/.test(m.toLabel) ? '으로' : '로'} 옮겨졌어요. 개정 전 판에는 안전기준 조문이 없었어요.`,
+      ordRows.length ? ` 조례도 비슷해요. ${ordRows.map((r) => r.current.label).join('·')}은 이미 다른 조문이 쓰고 있어서, 새 조문을 같은 번호에 넣으면 번호가 밀릴 수 있어요.` : '');
+  }
+
   // 검토 항목 한 건의 상세: 3단계 흐름 + 본문 + 대비표 틀 + 신구 비교 강조
   function renderFinding(f, d) {
     const card = h('div', { class: 'card' });
@@ -222,6 +251,7 @@
     const sentence = f.table?.sentence || f.rule.sentence || '';
 
     card.append(
+      crumbs(f),
       h('div', { class: 'meta' }, modeBadge(d.mode), badge(f.status, f.status === '검토 필요' ? 'warn' : 'ok')),
       quickStatus(f),
       chainBlock(f, d),
@@ -241,7 +271,9 @@
             h('div', { class: 'title' }, after.found ? `성북구 조례 ${after.ver.split(' · ')[0].replace('조례 ', '')}, ${after.articles.map((a) => a.label).join('·')} 신설` : '해당 조문을 찾지 못했어요'),
             h('div', { class: 'desc' }, after.articles.map((a) => a.heading).join(', ')),
             f.gap ? h('div', { class: 'tags' }, badge(`비어 있던 기간 약 ${f.gap.months}개월 ${f.gap.days}일`, 'demo'), h('span', { class: 'caption num' }, `${fmt(f.rule.date)} ~ ${fmt(dayBefore(after.date))}`)) : null))),
+      dateBox(f),
       f.alert ? h('div', { class: 'notice-box' }, h('strong', {}, '검토 필요  '), f.alert) : null,
+      sameNumberNote(f, d),
       highlightBlock(f, d),
       comparisonTable(f),
       h('details', {}, h('summary', {}, '조문 본문 보기'),
@@ -399,12 +431,26 @@
       msg].filter(Boolean)); // replaceChildren 은 null 을 "null" 글자로 넣어 버린다
   }
 
+
+  // 연결 상태: 어느 자료가 실시간이고 어느 자료가 저장값인지 한 곳에서 보여 준다
+  function connectionBlock(d) {
+    const row = (name, sec) => h('div', { class: 'row' },
+      h('div', {}, h('div', { class: 't' }, name),
+        h('div', { class: 's' }, sec.mode === '저장된 확인값' ? `${sec.savedAt}에 확인해 저장한 값${sec.reason ? ` · 이유: ${sec.reason}` : ''}` : sec.reason ? `이유: ${sec.reason}` : '지금 법제처에서 불러왔어요')),
+      h('div', { class: 'r' }, sec.mode === '준비 중' ? badge('준비 중', 'demo') : modeBadge(sec.mode)));
+    return h('details', {}, h('summary', {}, '연결 상태 보기'),
+      h('div', { class: 'details-body' }, h('div', { class: 'list' },
+        row('현행 법령', d.current), row('변경이력', d.history), row('신구법', d.oldnew), row('성북구 조례', d.ordinance), row('입법예고 (국민참여입법센터)', d.lawmaking)),
+        h('p', { class: 'caption' }, '서버가 법제처 응답을 10분 동안 보관해서, 아래 "마지막 조회" 시각은 이 화면이 불러온 때예요. 질문 답변은 AI 연결 상태가 질문할 때마다 달라질 수 있어요.')));
+  }
+
   async function loadLaw() {
     const mount = $('#law');
     mount.replaceChildren(h('div', { class: 'card' }, dots()));
     try {
       const res = await fetch('/api/law');
       const d = await res.json();
+      const fetchedAt = new Date();
       renderInbox(d);
       const card = h('div', { class: 'card' });
       if (d.behind?.length) {
@@ -423,8 +469,9 @@
             lawSection('변경이력', d.history, d.history.data.map((x) => lawRow(x))),
             lawSection('신구법 (원문 링크)', d.oldnew, d.oldnew.data.map((x) => lawRow(x))))),
         noticeBlock(d.lawmaking),
+        connectionBlock(d),
         h('p', { class: 'caption mt-20' }, d.notice),
-        h('div', { class: 'mt-12' }, h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: loadLaw }, '다시 불러오기')));
+        h('div', { class: 'mt-12' }, h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: loadLaw }, '다시 불러오기'), h('span', { class: 'caption num fetched' }, ` 마지막 조회 ${fetchedAt.toLocaleString('ko-KR', { hour12: false })}`)));
       mount.replaceChildren(card);
     } catch {
       mount.replaceChildren(h('div', { class: 'card' }, '현행 정보를 불러오지 못했어요. 잠시 뒤에 다시 시도해 주세요. ', h('button', { type: 'button', class: 'text-btn', onclick: loadLaw }, '다시 불러오기')));
@@ -510,7 +557,7 @@
       .forEach((title, i) => items.push({ id: `task|${i + 1}`, title: `조례 작업 · ${title}`, sub: `${ordName} · 직접 할 일`, date: baseDate, review: '할 일', open: false, task: true }));
     const data = readBoard();
     const entry = (id) => (data[id] = cleanEntry(data[id]));
-    const ui = { q: '', status: '전체', sort: 'due' };
+    const ui = { q: '', status: '전체', sort: 'due', view: 'cards' };
     const note = h('p', { class: 'caption', role: 'status' });
     const list = h('div', { class: 'board-list' });
     const summary = h('div', { class: 'board-summary', role: 'group', 'aria-label': '진행 상태별 개수' });
@@ -553,6 +600,28 @@
       summary.replaceChildren(chip('전체', items.length, '전체'), ...STATUSES.map((st) => chip(st, counts[st], st)));
     }
 
+    // 한 줄씩 보는 요약표 (수정은 카드에서)
+    function tableView(shown) {
+      const col = ['법령', '시행일', '진행 상태', '담당자', '기한', '협의 부서', ''];
+      return h('div', { class: 'cmp-wrap' }, h('table', { class: 'cmp board-table' },
+        h('thead', {}, h('tr', {}, col.map((c) => h('th', {}, c)))),
+        h('tbody', {}, shown.map((it) => {
+          const e = entry(it.id);
+          return h('tr', {},
+            h('td', { 'data-label': '법령' }, h('strong', {}, it.title)),
+            h('td', { class: 'num', 'data-label': '시행일' }, it.task ? '-' : fmt(it.date)),
+            h('td', { 'data-label': '진행 상태' }, badge(e.status, e.status === '검토 완료' ? 'ok' : e.status === '확인 전' ? '' : 'live')),
+            h('td', { 'data-label': '담당자' }, e.owner || '-'),
+            h('td', { class: 'num', 'data-label': '기한' }, e.due ? fmt(e.due) : '-'),
+            h('td', { 'data-label': '협의 부서' }, e.dept || '-'),
+            h('td', { class: 'cmp-act' }, h('button', { type: 'button', class: 'text-btn', onclick: () => { ui.view = 'cards'; drawView(); draw(); const el = document.getElementById(`bf-${items.indexOf(it)}-status`); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } } }, '수정')));
+        }))));
+    }
+    const viewBtns = h('div', { class: 'view-switch', role: 'group', 'aria-label': '보기 방식' });
+    function drawView() {
+      viewBtns.replaceChildren(...[['cards', '카드'], ['table', '표']].map(([v, label]) => h('button', { type: 'button', class: 'sum-chip' + (ui.view === v ? ' on' : ''), 'aria-pressed': String(ui.view === v), onclick: () => { ui.view = v; drawView(); draw(); } }, label)));
+    }
+
     const dueKey = (it) => entry(it.id).due || '9999-99-99';
     function draw() {
       const q = ui.q.trim().toLowerCase();
@@ -560,7 +629,8 @@
         const e = entry(it.id);
         return (ui.status === '전체' || e.status === ui.status) && (!q || [it.title, it.sub, e.owner, e.dept, e.memo].join(' ').toLowerCase().includes(q));
       }).sort((a, b) => (ui.sort === 'due' ? dueKey(a).localeCompare(dueKey(b)) : a.date.localeCompare(b.date)));
-      list.replaceChildren(...(shown.length ? shown.map((it) => card(it, items.indexOf(it))) : [h('p', { class: 'caption' }, '조건에 맞는 항목이 없어요.')]));
+      if (!shown.length) { list.replaceChildren(h('p', { class: 'caption' }, '조건에 맞는 항목이 없어요.')); return; }
+      list.replaceChildren(...(ui.view === 'table' ? [tableView(shown)] : shown.map((it) => card(it, items.indexOf(it)))));
     }
 
     const fileInput = h('input', { type: 'file', accept: 'application/json,.json', class: 'sr', id: 'board-file', tabindex: '-1' });
@@ -586,6 +656,7 @@
         h('div', { class: 'bf' }, h('label', { for: 'board-status' }, '진행 상태'), h('select', { class: 'field', id: 'board-status', onchange: (ev) => { ui.status = ev.target.value; drawSummary(); draw(); } }, ['전체', ...STATUSES].map((st) => h('option', { value: st }, st)))),
         h('div', { class: 'bf' }, h('label', { for: 'board-sort' }, '정렬'), h('select', { class: 'field', id: 'board-sort', onchange: (ev) => { ui.sort = ev.target.value; draw(); } }, h('option', { value: 'due' }, '기한 빠른 순'), h('option', { value: 'date' }, '법령 시행일 순')))),
       summary,
+      viewBtns,
       list,
       h('div', { class: 'board-actions' },
         h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: () => {
@@ -599,6 +670,7 @@
     boardListener = (ev) => { if (ev.detail?.source === 'board') return; for (const [k, v] of Object.entries(readBoard())) data[k] = cleanEntry(v); drawSummary(); draw(); };
     window.addEventListener('law-board-changed', boardListener);
     drawSummary();
+    drawView();
     draw();
   }
   let boardListener = null;
