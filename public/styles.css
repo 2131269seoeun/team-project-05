@@ -276,3 +276,9 @@ details[open] summary::after { content: "접기"; }
 .check-item label { display: grid; gap: 2px; cursor: pointer; }
 .check-item .t { font-weight: 600; font-size: 15px; }
 .check-item .s { font-size: 13px; color: var(--text-weak); }
+.cmp-details { margin-top: 20px; border: 1.5px solid var(--blue-500); background: var(--blue-50); border-radius: 16px; padding: 0 16px; }
+.cmp-details > summary { padding: 14px 0; font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cmp-details .details-body { padding-bottom: 16px; }
+.cmp-tag { padding: 2px 10px; border-radius: 999px; background: var(--red-wash); color: var(--red-text); font-size: 12px; font-weight: 600; }
+.cmp-details .cmp th { background: var(--surface); }
+.cmp-details .cmp td { background: var(--surface); }

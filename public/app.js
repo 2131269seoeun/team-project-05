@@ -118,8 +118,8 @@
       h('td', { class: 'cmp-empty' }, '담당자가 작성해요', r.reference ? h('div', { class: 'caption' }, `참고: ${r.reference}`) : null)));
     const asText = () => [`[신구조문 대비표 틀] ${t.basis}`, t.sentence ? `위임 문구: ${t.sentence}` : '', '', ...t.rows.map((r, i) => `${i + 1}. 현행: ${r.current ? `${r.current.heading}\n${r.current.text}` : r.currentNote}\n   개정안: (담당자 작성)`)].filter((x) => x !== '').join('\n');
     const status = h('span', { class: 'caption', role: 'status' });
-    return h('details', {},
-      h('summary', {}, '신구조문 대비표 틀 보기'),
+    return h('details', { class: 'cmp-details', open: 'open' },
+      h('summary', {}, '신구조문 대비표 틀', h('span', { class: 'cmp-tag' }, '검토 필요 조문')),
       h('div', { class: 'details-body' },
         t.sentence ? h('p', { class: 'cmp-basis' }, h('strong', {}, `근거 · ${t.basis}  `), `"${t.sentence}"`) : null,
         h('div', { class: 'cmp-wrap' }, h('table', { class: 'cmp' },
