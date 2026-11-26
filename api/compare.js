@@ -2,6 +2,11 @@
 // AI 를 쓰지 않고 chunks 만으로 계산한다.
 import { articles, VERSIONS } from './_lib/chunks.js';
 
+const stripHeading = (t) => (t || '').replace(/^## .*\n+/, '').trim();
+// 숫자 뒤 조사 (3·6·0 은 받침이 있어 "으로")
+const ro = (label) => (/[360]$/.test(label) ? '으로' : '로');
+const titleOf = (heading) => (heading.match(/\(([^)]*)\)/) || [])[1];
+
 const NOTICE = '2019~2021년 기준 자료이며 현행 법령과 다를 수 있어요.';
 
 // 날짜 표시("2019. 12. 31." / "2021.10.6.")가 들어 있는 줄에서, 그 날짜에 바뀐 종류를 찾는다
@@ -57,6 +62,28 @@ function ordinanceLinks(code, label) {
     .map((a) => ({ label: a.label, heading: a.heading, body: a.body }));
 }
 
+// 개정 후 판에서 번호만 옮겨진 조문의 개정 전 원문을 찾는다 (신구조문 대비표의 "현행" 칸)
+function movedPairs() {
+  const before = articles('ord1349');
+  return changedAt('ord1396').filter((c) => c.kind === '이동').map((c) => {
+    const prev = before.find((a) => titleOf(a.heading) === titleOf(c.heading));
+    return prev ? { current: { label: prev.label, heading: prev.heading, text: stripHeading(prev.body) }, reference: `이후 판(제1396호)에서는 ${c.label}${ro(c.label)} 옮겨졌어요.` } : null;
+  }).filter(Boolean);
+}
+
+// 신구조문 대비표의 틀 — 개정안 칸은 비워 둔다 (초안 문구는 쓰지 않고, 근거 문서에 있는 현행 조문만 채운다)
+function comparisonTable(d, before) {
+  if (before.length) return null;
+  return {
+    basis: `${VERSIONS.rule843.name} ${d.label}`,
+    sentence: ((d.body.match(/[^.\n]*조례로 정한 사유[^.\n]*/) || [''])[0]).trim() || null,
+    rows: [
+      { current: null, currentNote: '해당 규정을 찾지 못했어요 (<신설>)', reference: null },
+      ...movedPairs(),
+    ],
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET 으로 불러 주세요' });
   // 문서(chunks)로만 계산해서 배포 사이에는 바뀌지 않는다 — 1시간 캐시
@@ -78,6 +105,7 @@ export default async function handler(req, res) {
       },
       status: before.length === 0 ? '검토 필요' : '확인됨',
       gap,
+      table: comparisonTable(d, before),
       alert: before.length === 0
         ? `${VERSIONS.rule843.name} ${d.label} ${d.kind}(${VERSIONS.rule843.date.replaceAll('-', '.')}): 조례로 정하도록 맡긴 내용이 있어요. 대상 자치법규인 ${VERSIONS.ord1349.name}(제1349호)에서는 이에 해당하는 규정을 찾지 못했어요. 검토가 필요해요.`
         : null,

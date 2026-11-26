@@ -258,3 +258,21 @@ details[open] summary::after { content: "접기"; }
 @media (max-width: 520px) { .stale { width: 100%; justify-content: center; } }
 @media (min-width: 1024px) { section { padding-top: 56px; } }
 @media (max-width: 380px) { main, .top-inner { padding-left: 16px; padding-right: 16px; } .card { padding: 20px 16px; } h1 { font-size: 24px; } }
+
+/* 신구조문 대비표 틀 */
+.cmp-wrap { overflow-x: auto; margin-top: 12px; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.6; }
+.cmp th, .cmp td { border: 1px solid var(--line); padding: 10px 12px; vertical-align: top; text-align: left; min-width: 160px; }
+.cmp th { background: var(--grey-100); font-weight: 600; }
+.cmp-text { margin-top: 4px; white-space: pre-wrap; color: var(--text-sub); }
+.cmp-empty { color: var(--text-weak); }
+.cmp-basis { margin: 12px 0 0; font-size: 14px; }
+
+/* 개정 절차 체크리스트 */
+.checklist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; }
+.check-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 4px; border-top: 1px solid var(--line); }
+.check-item:first-child { border-top: 0; }
+.check-item input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; accent-color: var(--blue-500); }
+.check-item label { display: grid; gap: 2px; cursor: pointer; }
+.check-item .t { font-weight: 600; font-size: 15px; }
+.check-item .s { font-size: 13px; color: var(--text-weak); }

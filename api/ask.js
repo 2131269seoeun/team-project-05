@@ -54,8 +54,29 @@ function publicTried(tried) {
   return (tried || []).map((t) => ({ provider: t.provider, ok: t.ok }));
 }
 
+// AI 가 답하지 못할 때 보여 주는 발췌: 질문과 관련 있는 조문 1~2개만 고른다.
+// 질문의 두 글자 조각이 조문(제목은 3배)에 얼마나 들어 있는지로 고르고, 제1조(목적)·장 제목처럼 어느 질문에나 걸리는 조각은 뺀다.
+const STOP = new Set(['있나', '나요', '무엇', '어떻', '어느', '어떤', '하나', '해요', '인가', '인지', '그리', '이런', '저런', '우리', '한다', '하는', '해야', '해서', '이고', '에서', '으로', '에게']);
+function pickRelevant(question, chunks, max = 2) {
+  const bigrams = new Set();
+  for (const w of question.match(/[가-힣A-Za-z0-9]{2,}/g) || []) for (let i = 0; i + 1 < w.length; i++) { const b = w.slice(i, i + 2); if (!STOP.has(b)) bigrams.add(b); }
+  const generic = (c) => /^제1조$/.test(c.label) || /^제\d+장/.test(c.label) || c.label === '문서 정보' || /^제1조\(목적\)/.test(c.heading || '');
+  const score = (c) => { let n = 0; for (const b of bigrams) { if ((c.heading || '').includes(b)) n += 3; if (c.body.includes(b)) n += 1; } return n; };
+  const ranked = chunks.map((c, i) => ({ c, i, s: generic(c) ? -1 : score(c) * (c.code === 'case_safety' ? 0.4 : 1) })).sort((a, b) => b.s - a.s || a.i - b.i);
+  const picked = [];
+  const seen = new Set();
+  for (const { c, s } of ranked) {
+    if (s < 0 && picked.length) break;
+    const key = c.family + '|' + ((c.heading || '').match(/\(([^)]*)\)/)?.[1] || c.label); // 같은 조문이 개정 전·후(번호만 다름)로 둘 다 나오면 앞선 것만
+    if (seen.has(key)) continue;
+    seen.add(key); picked.push(c);
+    if (picked.length >= max) break;
+  }
+  return picked.length ? picked : chunks.slice(0, 1);
+}
+
 function excerpt(chunks) {
-  return chunks.slice(0, 3).map((c) => `■ ${c.name} · ${c.heading} (${c.ver})\n${c.body.slice(0, 500)}${c.body.length > 500 ? '…' : ''}`).join('\n\n');
+  return chunks.map((c) => `■ ${c.name} · ${c.heading} (${c.ver})\n${c.body.slice(0, 600)}${c.body.length > 600 ? '…' : ''}`).join('\n\n');
 }
 
 export default async function handler(req, res) {
@@ -107,10 +128,11 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     // 모든 AI 가 막혔을 때: 이유와 함께 문서 발췌(시연 값)를 보여 준다
+    const shown = pickRelevant(question, r.chunks);
     return res.status(200).json({
       found: true, mode: '시연 값',
-      answer: `AI 가 지금 답하지 못해서 근거 문서의 해당 부분만 보여 드려요. 아래 내용을 직접 확인해 주세요.\n\n${excerpt(r.chunks)}`,
-      sources: sourcesOf(r.chunks),
+      answer: `AI 가 지금 답하지 못해서 질문과 가장 관련 있는 근거 문서 ${shown.length}곳만 보여 드려요. 아래 내용을 직접 확인해 주세요.\n\n${excerpt(shown)}`,
+      sources: sourcesOf(shown),
       ai: { provider: null, tried: publicTried(e.tried || []) },
       notice: NOTICE,
     });

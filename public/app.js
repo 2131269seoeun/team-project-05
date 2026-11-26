@@ -105,6 +105,32 @@
 
   const stripHeading = (t) => (t || '').replace(/^## .*\n+/, '');
 
+
+  // 신구조문 대비표 틀: 현행 조문과 시행규칙 위임 문구만 채우고, 개정안 칸은 담당자가 쓴다
+  function comparisonTable(f) {
+    const t = f.table;
+    if (!t) return null;
+    const cell = (c, note) => c
+      ? h('td', {}, h('strong', {}, c.heading), h('div', { class: 'cmp-text' }, c.text))
+      : h('td', { class: 'cmp-empty' }, note || '');
+    const rows = t.rows.map((r) => h('tr', {},
+      cell(r.current, r.currentNote),
+      h('td', { class: 'cmp-empty' }, '담당자가 작성해요', r.reference ? h('div', { class: 'caption' }, `참고: ${r.reference}`) : null)));
+    const asText = () => [`[신구조문 대비표 틀] ${t.basis}`, t.sentence ? `위임 문구: ${t.sentence}` : '', '', ...t.rows.map((r, i) => `${i + 1}. 현행: ${r.current ? `${r.current.heading}\n${r.current.text}` : r.currentNote}\n   개정안: (담당자 작성)`)].filter((x) => x !== '').join('\n');
+    const status = h('span', { class: 'caption', role: 'status' });
+    return h('details', {},
+      h('summary', {}, '신구조문 대비표 틀 보기'),
+      h('div', { class: 'details-body' },
+        t.sentence ? h('p', { class: 'cmp-basis' }, h('strong', {}, `근거 · ${t.basis}  `), `"${t.sentence}"`) : null,
+        h('div', { class: 'cmp-wrap' }, h('table', { class: 'cmp' },
+          h('thead', {}, h('tr', {}, h('th', {}, '현행 (개정 전 조례)'), h('th', {}, '개정안'))),
+          h('tbody', {}, rows))),
+        h('p', { class: 'caption' }, '현행 칸은 근거 문서의 조문이에요. 개정안 문구는 앱이 쓰지 않아요. 판단과 작성은 담당자가 해요.'),
+        h('div', { class: 'mt-12' }, h('button', { type: 'button', class: 'btn btn-m btn-secondary', onclick: async () => {
+          try { await navigator.clipboard.writeText(asText()); status.textContent = ' 복사했어요'; } catch { status.textContent = ' 복사하지 못했어요. 직접 선택해 복사해 주세요'; }
+        } }, '표 내용 복사'), status)));
+  }
+
   function renderCompare(d) {
     const f = d.findings?.[0];
     const card = h('div', { class: 'card' });
@@ -135,6 +161,7 @@
         h('div', { class: 'doc-label' }, `${f.rule.name} ${f.rule.label} (${f.rule.ver})`),
         h('div', { class: 'doc' }, stripHeading(f.rule.text)),
         after.articles[0] ? [h('div', { class: 'doc-label' }, `성북구 조례 ${after.articles[0].label} (${after.ver})`), h('div', { class: 'doc' }, stripHeading(after.articles[0].text))] : null),
+      comparisonTable(f),
       h('div', { class: 'sec-head' }, h('h3', {}, `${f.rule.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.rule.changedCount}개`)),
       h('div', { class: 'tags' }, d.rule.changed.map((c) => badge(`${c.label} ${c.kind}`, c.delegatesToOrdinance ? 'warn' : ''))),
       h('div', { class: 'sec-head' }, h('h3', {}, `${d.ordinance.to.ver.split(' · ')[0]}에서 바뀐 조문`), h('span', { class: 'caption num' }, `${d.ordinance.changedCount}개`)),
@@ -288,8 +315,45 @@
     }
   }
 
+  // ---------- 4구역: 개정 절차 체크리스트 ----------
+  // 앱의 근거 문서에 없는 일반 절차예요. 기간·기관은 성북구 규정으로 확인해야 해서 숫자는 적지 않았어요.
+  // 체크 표시는 이 브라우저(localStorage)에만 저장해요.
+  const STEPS = [
+    ['위임 사항 확인', '개정 비교의 "검토 필요" 조문과 조례 전문을 대조해요.'],
+    ['담당 부서 협의 · 현장 실태조사', '조례에 정할 예외 사유를 확정해요.'],
+    ['조문 번호 방안 결정', '새 조문의 위치와, 기존 조문 번호를 옮길지 정해요.'],
+    ['인용 조문 점검', '번호가 바뀌면 다른 조문·규칙이 그 번호를 인용하는지 확인해요.'],
+    ['신구조문 대비표 작성', '개정 비교의 대비표 틀을 쓰고 개정안 칸을 채워요.'],
+    ['입법예고', '기간과 방법은 구의 조례·규칙으로 확인해요.'],
+    ['법제 검토 · 내부 심의', '심의 기구와 절차는 구 규정으로 확인해요.'],
+    ['구청장 결재 · 구의회 제출 · 의결', '일정은 구의회 운영에 맞춰 확인해요.'],
+    ['부칙 확인', '시행일과 경과조치를 정해요.'],
+    ['공포 · 시행 · 자치법규 반영 확인', '공포 뒤 자치법규정보시스템에 반영됐는지 봐요.'],
+  ];
+  const CHECK_KEY = 'law-alert-checklist';
+  function renderChecklist() {
+    const mount = $('#checklist');
+    let done = [];
+    try { done = JSON.parse(localStorage.getItem(CHECK_KEY) || '[]'); } catch { /* 저장 못 해도 동작 */ }
+    const save = () => { try { localStorage.setItem(CHECK_KEY, JSON.stringify(done)); } catch { /* 무시 */ } };
+    const count = h('span', { class: 'caption num', role: 'status' });
+    const refresh = () => { count.textContent = `${done.length} / ${STEPS.length} 완료`; };
+    const items = STEPS.map(([title, note], i) => {
+      const box = h('input', { type: 'checkbox', id: `step-${i}`, checked: done.includes(i) ? 'checked' : null });
+      box.addEventListener('change', () => { done = box.checked ? [...new Set([...done, i])] : done.filter((x) => x !== i); save(); refresh(); });
+      return h('li', { class: 'check-item' }, box, h('label', { for: `step-${i}` }, h('span', { class: 't' }, `${i + 1}. ${title}`), h('span', { class: 's' }, note)));
+    });
+    refresh();
+    mount.replaceChildren(h('div', { class: 'card' },
+      h('div', { class: 'sec-head' }, h('h3', {}, '조례 개정 단계'), badge('일반 절차 · 확인 필요', 'demo')),
+      h('p', { class: 'caption' }, '앱의 근거 문서에 없는 일반적인 순서예요. 기간과 기관은 성북구 규정으로 확인해 주세요.'),
+      h('ol', { class: 'checklist' }, items),
+      h('div', { class: 'mt-12' }, count, ' ', h('button', { type: 'button', class: 'text-btn', onclick: () => { done = []; save(); renderChecklist(); } }, '처음부터 다시'))));
+  }
+
   loadCompare();
   loadLaw();
+  renderChecklist();
   setupSubscribe();
   setInterval(refreshInbox, 10 * 60 * 1000);
 })();
